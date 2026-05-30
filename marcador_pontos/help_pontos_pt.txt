@@ -1,0 +1,38 @@
+MARCADOR DE PONTOS — ARTICULAÇÕES E REFERÊNCIAS (VISTA PLANTAR)
+================================================================
+
+Cada letra (A–F) representa um ponto que deve colocar com um único clique sobre a imagem.
+Todos os pontos assinalados permanecem visíveis ao mesmo tempo. Escolha o tipo na lista antes de clicar.
+
+A — HÁLUX — ARTICULAÇÃO MTP
+Referência na base do hálux, ao nível aproximado da articulação metatarso-falangiana.
+
+Complemento para localizar em planta P&B (orientação habitual: dedos para cima no ecrã):
+o hálux é o dedão; em pé DIREITO a face medial (lado do hálux) costuma aparecer à ESQUERDA
+da imagem. Na zona escura do antepé (faixa superior da pegada), o hálux tende a corresponder
+a uma mancha arredondada relativamente larga do lado medial; em análise por tons, uma
+heurística útil é considerar a região mais escura nessa faixa, no terço medial-anterior da
+silhueta, e deslocar ligeiramente em sentido proximal (em direção ao retropé) para aproximar
+a MTP em vez do extremo distal da polpa. Pé ESQUERDO: inverter medial/lateral na imagem
+(medial à direita). Isto orienta marcação manual e revisão; o botão «Sugerir pontos» no
+programa usa coordenadas fixas dentro da caixa detetada da pegada, não interpreta este texto.
+
+B — 5.º METATARSO — CABEÇA
+Cabeça do osso do quinto raio, zona lateral do antepé.
+
+C — MÉDIO-PÉ — REFERÊNCIA MEDIAL
+Ponto de apoio ou proeminência na margem medial do arco (conforme a sua convenção clínica).
+
+D — CALCÂNEO — FACE MEDIAL
+Referência na região medial do calcâneo / retropé.
+
+E — CALCÂNEO — FACE LATERAL
+Referência na região lateral do calcâneo.
+
+F — RETROPÉ — REFERÊNCIA CENTRAL
+Ponto central ou posterior do segmento do calcanhar, conforme protocolo da equipa.
+
+Nota: «Sugerir pontos» tenta detetar a pegada (área mais escura que o fundo claro) e coloca marcas dentro dessa caixa. Imagens sem contraste ou pé no sentido oposto podem precisar de ajuste manual.
+
+---
+Edite este ficheiro (help_pontos_pt.txt); o texto aparece em «Ajuda deste marcador» com «Pontos — articulações e referências» selecionado.

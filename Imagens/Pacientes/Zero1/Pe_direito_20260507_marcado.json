@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "protocol": "plantar_lines_v1",
+  "source_image": "Pe_direito_20260507.png",
+  "source_path": "Imagens/Pacientes/Zero1/Pe_direito_20260507.png",
+  "image_size": {
+    "width": 1122,
+    "height": 1402
+  },
+  "markers": [
+    {
+      "family": "line",
+      "id": "line_longitudinal_axis",
+      "letter": "A",
+      "label_pt": "Eixo longitudinal",
+      "points": [
+        [
+          671.6854545454545,
+          606.6836363636363
+        ],
+        [
+          486.87636363636364,
+          428.24727272727273
+        ]
+      ]
+    }
+  ]
+}

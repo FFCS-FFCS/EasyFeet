@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Dados locais (pacientes, SQLite, PDFs de teste gerados)
+data/
+
+# Build / instalador
+build/
+dist/
+dist_new/
+release/
+
+# Snapshots ZIP (gerados por CriarSnapshot.bat)
+snapshots/*.zip
+
+# Pacotes / binarios grandes
+EasyFeet_Com_Dados.zip
+*.exe
+
+# Atalhos e lixo do Windows
+desktop.ini
+*.lnk
+Thumbs.db
+
+# Cursor / IDE (opcional)
+.cursor/
+
+# Excel / Word abertos ou apoio local (nao e codigo)
+Documentos de Apoio/

@@ -1,0 +1,21 @@
+MARCADOR DE LINHAS — VISTA PLANTAR
+==================================
+
+Este instrumento assinala quatro medidas de referência sobre a imagem do pé, para registo e análise clínica ou documentação.
+
+A — EIXO LONGITUDINAL
+Segmento que segue a orientação geral do pé no sentido antepé → retropé (eixo aproximado de simetria na vista em que a planta está de frente). Serve de referência para alinhar as outras medidas.
+
+B — LARGURA DO ANTEPÉ
+Linha de largura na região dos metatarsos (antepé), em geral ao nível em que o apoio à frente é mais largo. Descreve a extensão medial-lateral nessa zona.
+
+C — LARGURA DO MÉDIO-PÉ
+Linha de largura na região intermédia (arco), entre antepé e retropé, num nível em que o pé costuma ser mais estreito. Ajuda a caracterizar o suporte nessa área.
+
+D — LARGURA DO RETROPÉ
+Linha de largura na região do calcanhar (retropé), ao nível posterior do apoio. Complementa a descrição da base traseira.
+
+Nota: A colocação automática («Gerar todas as linhas») é orientativa. Ajuste cada tipo no menu e marque de novo com dois cliques (início e fim), consoante a postura e a qualidade da imagem.
+
+---
+Pode editar este ficheiro (help_plantar_pt.txt) para alterar estes textos; as mudanças aparecem ao abrir «Ajuda deste marcador» com «Linhas — vista plantar» selecionado na janela do módulo EFM.

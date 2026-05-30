@@ -1,0 +1,184 @@
+{
+  "version": "1.0.0",
+  "app": {
+    "name": "EasyFeet",
+    "defaultRoute": "/dashboard"
+  },
+  "roles": [
+    "admin",
+    "fisioterapeuta",
+    "recepcao"
+  ],
+  "menu": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "icon": "layout-dashboard",
+      "route": "/dashboard",
+      "order": 10,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+    },
+    {
+      "id": "pacientes",
+      "label": "Pacientes",
+      "icon": "users",
+      "route": "/pacientes",
+      "order": 20,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "crud": {
+        "resource": "pacientes",
+        "actions": ["list", "create", "detail", "edit", "archive"]
+      }
+    },
+    {
+      "id": "avaliacoes",
+      "label": "Avaliações",
+      "icon": "clipboard-check",
+      "route": "/avaliacoes",
+      "order": 30,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "crud": {
+        "resource": "avaliacoes",
+        "actions": ["list", "create", "detail", "edit", "archive"]
+      }
+    },
+    {
+      "id": "laudos",
+      "label": "Laudos",
+      "icon": "file-text",
+      "route": "/laudos",
+      "order": 40,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "crud": {
+        "resource": "laudos",
+        "actions": ["list", "create", "detail", "edit"]
+      }
+    },
+    {
+      "id": "palmilhas",
+      "label": "Palmilhas",
+      "icon": "footprints",
+      "route": "/palmilhas",
+      "order": 50,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "crud": {
+        "resource": "palmilhas",
+        "actions": ["list", "create", "detail", "edit", "archive"]
+      }
+    },
+    {
+      "id": "imagens",
+      "label": "Imagens",
+      "icon": "image",
+      "route": "/imagens",
+      "order": 60,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "crud": {
+        "resource": "imagens",
+        "actions": ["list", "create", "detail", "edit", "archive"]
+      }
+    },
+    {
+      "id": "modulos",
+      "label": "Módulos",
+      "icon": "layers",
+      "route": "/modulos",
+      "order": 65,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "children": [
+        {
+          "id": "efm_marcadores",
+          "label": "Marcadores",
+          "route": "/modulos/marcadores",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+        },
+        {
+          "id": "avaliacao_postural",
+          "label": "Avaliação Postural",
+          "route": "/modulos/avaliacao-postural",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "podoscopio",
+          "label": "Podoscópio",
+          "route": "/modulos/podoscopio",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+          "children": [
+            {
+              "id": "podoscopio_ficha_tecnica",
+              "label": "Ficha técnica",
+              "route": "/modulos/podoscopio/ficha-tecnica",
+              "order": 10,
+              "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "relatorios",
+      "label": "Relatórios",
+      "icon": "bar-chart",
+      "route": "/relatorios",
+      "order": 70,
+      "visibleFor": ["admin", "fisioterapeuta"]
+    },
+    {
+      "id": "configuracoes",
+      "label": "Configurações",
+      "icon": "settings",
+      "route": "/configuracoes",
+      "order": 80,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "children": [
+        {
+          "id": "configuracoes_regras_marcadores",
+          "label": "Regras Marcadores",
+          "route": "/configuracoes/regras-marcadores",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    }
+  ],
+  "homeCards": [
+    {
+      "id": "hoje",
+      "title": "Hoje",
+      "widgets": [
+        "atendimentos_do_dia",
+        "avaliacoes_realizadas",
+        "laudos_emitidos"
+      ]
+    },
+    {
+      "id": "pendencias",
+      "title": "Pendências",
+      "widgets": [
+        "avaliacoes_sem_laudo",
+        "palmilhas_em_andamento",
+        "revisoes_pendentes"
+      ]
+    },
+    {
+      "id": "pacientes_recentes",
+      "title": "Pacientes recentes",
+      "widgets": [
+        "ultimos_atendimentos"
+      ]
+    },
+    {
+      "id": "atalhos",
+      "title": "Atalhos rápidos",
+      "widgets": [
+        "novo_paciente",
+        "nova_avaliacao",
+        "anexar_imagens",
+        "gerar_analise_preliminar"
+      ]
+    }
+  ]
+}
