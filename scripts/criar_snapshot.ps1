@@ -19,7 +19,8 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 try {
     $excludeDirs = @(
         "data", "build", "dist", "dist_new", "release",
-        "__pycache__", ".git", "snapshots", ".venv", "venv", ".pytest_cache"
+        "__pycache__", ".git", "snapshots", ".venv", "venv", ".pytest_cache",
+        "Documentos de Apoio"
     )
     $xd = ($excludeDirs | ForEach-Object { "/XD", $_ }) -join " "
     $robocmd = "robocopy `"$Root`" `"$staging`" /E /XD $($excludeDirs -join ' ') /XF *.zip desktop.ini *.lnk /NFL /NDL /NJH /NJS /nc /ns /np"
