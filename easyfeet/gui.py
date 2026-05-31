@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -47,7 +48,7 @@ from easyfeet.paciente_cadastro_pdf import (
     export_ficha_cadastro_paciente_pdf_preenchida,
 )
 from easyfeet.podoscopio_pdf import export_ficha_podoscopio_pdf_branco, export_ficha_podoscopio_pdf_preenchida
-from easyfeet.services import EasyFeetService
+from easyfeet.services import EasyFeetService, MOMENTO_OBSERVACOES_MAX, MOMENTO_ROTULO_MAX
 from easyfeet.version import format_app_version
 
 # Tamanho unico de texto na interface (alinha formulario, cabecalho e tabela).
@@ -110,6 +111,11 @@ class EasyFeetApp(ctk.CTk):
         self.config_data = load_menu_config()
         self.menu_state = MenuState()
         self._editing_paciente_id: int | None = None
+        self._pending_paciente_edit_id: int | None = None
+        self._paciente_form: dict[str, object] | None = None
+        self._hub_cliente_id: int | None = None
+        self._hub_section: str = "resumo"
+        self._hub_content_host: ctk.CTkScrollableFrame | None = None
         self._pacientes_tree: ttk.Treeview | None = None
         self._filter_sidebar: ctk.CTkToplevel | None = None
         self._paciente_filters: dict[str, str] = {
@@ -228,8 +234,13 @@ class EasyFeetApp(ctk.CTk):
         )
         self._sidebar_version.pack(side="bottom", anchor="w", padx=16, pady=(0, 14))
 
-        self._sidebar_menu_host = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self._sidebar_menu_host.pack(fill="both", expand=True)
+        self._sidebar_menu_host = ctk.CTkScrollableFrame(
+            self.sidebar,
+            fg_color="transparent",
+            scrollbar_button_color="#b8b8b8",
+            scrollbar_button_hover_color="#7c1229",
+        )
+        self._sidebar_menu_host.pack(fill="both", expand=True, padx=0, pady=(0, 4))
 
         self.content = ctk.CTkFrame(self, fg_color="#f7f7f8", corner_radius=0)
         self.content.grid(row=1, column=1, sticky="nsew")
@@ -318,6 +329,30 @@ class EasyFeetApp(ctk.CTk):
             self._filtro_btn.grid_remove()
             self._close_pacientes_filter_sidebar()
 
+    def _sidebar_label_display(self, label: str, *, compact: bool = False) -> tuple[str, int]:
+        """Quebra rotulos longos em duas linhas (sidebar estreita). Altura do botao em px."""
+        text = (label or "").strip()
+        if "\n" in text:
+            lines = text.count("\n") + 1
+            return text, 34 if compact else (38 + (lines - 1) * 10)
+        if len(text) <= 14:
+            return text, 34 if compact else 38
+        words = text.split()
+        if len(words) < 2:
+            return text, 34 if compact else 38
+        line1 = words[0]
+        line2 = " ".join(words[1:])
+        if len(line1) > 16:
+            return text, 34 if compact else 38
+        return f"{line1}\n{line2}", 44 if compact else 48
+
+    def _sidebar_module_selected(self, module_id: str) -> bool:
+        """Hub (ficha clinica) destaca Pacientes na sidebar."""
+        current = self.menu_state.current_module
+        if current == "paciente_hub":
+            return module_id == "pacientes"
+        return module_id == current
+
     def _render_sidebar(self) -> None:
         for child in self._sidebar_menu_host.winfo_children():
             child.destroy()
@@ -335,13 +370,14 @@ class EasyFeetApp(ctk.CTk):
             if children:
                 self._render_sidebar_accordion_row(item, children)
                 continue
-            parent_sel = item["id"] == self.menu_state.current_module
+            parent_sel = self._sidebar_module_selected(item["id"])
+            label_txt, btn_h = self._sidebar_label_display(item["label"])
             btn = ctk.CTkButton(
                 self._sidebar_menu_host,
-                text=item["label"],
+                text=label_txt,
                 font=ctk.CTkFont(size=UI_FONT_PT),
                 anchor="w",
-                height=38,
+                height=btn_h,
                 fg_color="#dbe8ff" if parent_sel else "#ffffff",
                 text_color="#232323",
                 hover_color="#e9eefc",
@@ -372,11 +408,14 @@ class EasyFeetApp(ctk.CTk):
         row = ctk.CTkFrame(self._sidebar_menu_host, fg_color="transparent")
         row.pack(fill="x", padx=12, pady=4)
 
+        parent_sel = self._sidebar_module_selected(item["id"])
+        label_txt, btn_h = self._sidebar_label_display(item["label"])
+
         chevron = ctk.CTkButton(
             row,
             text="▼" if expanded else "▶",
             width=36,
-            height=38,
+            height=btn_h,
             font=ctk.CTkFont(size=UI_FONT_PT),
             fg_color="#eceef2",
             text_color="#232323",
@@ -386,13 +425,12 @@ class EasyFeetApp(ctk.CTk):
         )
         chevron.pack(side="left", padx=(0, 6))
 
-        parent_sel = item["id"] == self.menu_state.current_module
         title_btn = ctk.CTkButton(
             row,
-            text=item["label"],
+            text=label_txt,
             font=ctk.CTkFont(size=UI_FONT_PT),
             anchor="w",
-            height=38,
+            height=btn_h,
             fg_color="#dbe8ff" if parent_sel else "#ffffff",
             text_color="#232323",
             hover_color="#e9eefc",
@@ -411,13 +449,14 @@ class EasyFeetApp(ctk.CTk):
                 self._render_sidebar_leaf_button(ch, indent=22)
 
     def _render_sidebar_leaf_button(self, item: dict, *, indent: int) -> None:
-        child_sel = item["id"] == self.menu_state.current_module
+        child_sel = self._sidebar_module_selected(item["id"])
+        label_txt, btn_h = self._sidebar_label_display(item["label"], compact=True)
         sub = ctk.CTkButton(
             self._sidebar_menu_host,
-            text=f"  {item['label']}",
+            text=f"  {label_txt}",
             font=ctk.CTkFont(size=UI_FONT_PT - 1),
             anchor="w",
-            height=34,
+            height=btn_h,
             fg_color="#dbe8ff" if child_sel else "#ffffff",
             text_color="#232323",
             hover_color="#e9eefc",
@@ -432,11 +471,14 @@ class EasyFeetApp(ctk.CTk):
         row = ctk.CTkFrame(self._sidebar_menu_host, fg_color="transparent")
         row.pack(fill="x", padx=(indent, 12), pady=2)
 
+        parent_sel = self._sidebar_module_selected(item["id"])
+        label_txt, btn_h = self._sidebar_label_display(item["label"], compact=True)
+
         chevron = ctk.CTkButton(
             row,
             text="▼" if expanded else "▶",
             width=32,
-            height=32,
+            height=btn_h,
             font=ctk.CTkFont(size=UI_FONT_PT - 1),
             fg_color="#eceef2",
             text_color="#232323",
@@ -446,13 +488,12 @@ class EasyFeetApp(ctk.CTk):
         )
         chevron.pack(side="left", padx=(0, 4))
 
-        parent_sel = item["id"] == self.menu_state.current_module
         title_btn = ctk.CTkButton(
             row,
-            text=item["label"],
+            text=label_txt,
             font=ctk.CTkFont(size=UI_FONT_PT - 1),
             anchor="w",
-            height=32,
+            height=btn_h,
             fg_color="#dbe8ff" if parent_sel else "#ffffff",
             text_color="#232323",
             hover_color="#e9eefc",
@@ -477,21 +518,43 @@ class EasyFeetApp(ctk.CTk):
             self._build_dashboard()
         elif module_id == "pacientes":
             self._build_pacientes()
-        elif module_id == "modulos":
-            self._build_modulos_hub()
-        elif module_id == "efm_marcadores":
-            self._open_efm_marcadores()
-            self._build_placeholder("efm_marcadores")
-        elif module_id == "avaliacao_postural":
-            self._build_placeholder("avaliacao_postural")
+        elif module_id in ("paciente_hub",):
+            self._build_paciente_hub()
+        elif module_id == "plantigrafo":
+            self._build_plantigrafo_hub()
+        elif module_id in ("efm_marcadores",):
+            self._build_efm_shell_placeholder()
+        elif module_id in ("plantigrafo_config", "configuracoes_regras_marcadores"):
+            self._build_configuracoes_regras_marcadores()
         elif module_id == "podoscopio":
             self._build_podoscopio_hub()
         elif module_id == "podoscopio_ficha_tecnica":
             self._build_podoscopio_ficha_tecnica()
         elif module_id == "configuracoes":
             self._build_configuracoes_hub()
-        elif module_id == "configuracoes_regras_marcadores":
-            self._build_configuracoes_regras_marcadores()
+        elif module_id == "avaliacao_postural":
+            self._build_avaliacao_postural_hub()
+        elif module_id in (
+            "laudos_consolidado",
+            "plantigrafo_laudos",
+            "podoscopio_laudos",
+            "podoscopio_config",
+            "palmilhas",
+            "relatorios",
+            "postural_avaliacao",
+            "postural_laudos",
+            "postural_config",
+            "config_clinica",
+            "config_usuarios",
+            "config_licencas",
+            "config_templates_pdf",
+            "avaliacoes",
+            "laudos",
+            "imagens",
+        ):
+            self._build_placeholder(module_id)
+        elif module_id == "modulos":
+            self._show_module("plantigrafo")
         else:
             self._build_placeholder(module_id)
         self._update_header_paciente_tools()
@@ -684,6 +747,9 @@ class EasyFeetApp(ctk.CTk):
         )
 
     def _build_pacientes(self) -> None:
+        if self._pending_paciente_edit_id is None:
+            self._editing_paciente_id = None
+
         shell = ctk.CTkFrame(self.content, fg_color="transparent")
         shell.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         shell.grid_columnconfigure(0, weight=1)
@@ -846,6 +912,21 @@ class EasyFeetApp(ctk.CTk):
         obs.bind("<FocusIn>", _focus_obs_in)
         obs.bind("<FocusOut>", _focus_obs_out)
 
+        self._paciente_form = {
+            "title_label": title_label,
+            "salvar_btn": None,
+            "nome": nome,
+            "telefone": telefone,
+            "email": email,
+            "nascimento": nascimento,
+            "sexo": sexo,
+            "lateralidade": lateralidade,
+            "altura": altura,
+            "peso": peso,
+            "obs": obs,
+            "on_corporal_change": _on_corporal_change,
+        }
+
         def _apply_date_mask(_event: object | None = None) -> None:
             raw = "".join(ch for ch in nascimento.get() if ch.isdigit())[:8]
             parts: list[str] = []
@@ -904,6 +985,10 @@ class EasyFeetApp(ctk.CTk):
                 messagebox.showerror("Validacao", str(exc))
                 return
 
+            limpar_formulario_novo()
+            self._refresh_patients_table(tree)
+
+        def limpar_formulario_novo() -> None:
             self._editing_paciente_id = None
             title_label.configure(text="Novo paciente")
             salvar_btn.configure(text="Salvar paciente")
@@ -915,7 +1000,8 @@ class EasyFeetApp(ctk.CTk):
             sexo.set("Selecione... *")
             lateralidade.set("Selecione... *")
             _on_corporal_change()
-            self._refresh_patients_table(tree)
+            for sel in tree.selection():
+                tree.selection_remove(sel)
 
         salvar_btn = ctk.CTkButton(
             form,
@@ -926,20 +1012,22 @@ class EasyFeetApp(ctk.CTk):
             command=salvar_ou_atualizar,
         )
         salvar_btn.grid(row=6, column=5, padx=8, pady=(4, 12), sticky="e")
+        if self._paciente_form is not None:
+            self._paciente_form["salvar_btn"] = salvar_btn
         _on_corporal_change()
 
         table_box = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
         table_box.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         table_box.grid_columnconfigure(0, weight=1)
 
-        historico_box = ctk.CTkFrame(
+        ctk.CTkLabel(
             root,
-            fg_color="#ffffff",
-            corner_radius=12,
-            border_width=1,
-            border_color="#ececec",
-        )
-        historico_box.grid(row=2, column=0, sticky="ew", pady=(0, 16))
+            text="Marcacoes e momentos clinicos: selecione o paciente e use «Abrir ficha clinica» → Linha do tempo.",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#666666",
+            wraplength=900,
+            justify="left",
+        ).grid(row=2, column=0, sticky="w", pady=(0, 14))
 
         table_hdr = ctk.CTkFrame(table_box, fg_color="transparent")
         table_hdr.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 6))
@@ -975,9 +1063,9 @@ class EasyFeetApp(ctk.CTk):
             ("altura", "Alt. (m)", 80, "center"),
             ("peso", "Peso (kg)", 84, "center"),
             ("imc", "IMC", 64, "center"),
-            ("lat", "Lateral.", 96, "center"),
+            ("lat", "Lateralidade", 118, "center"),
             ("telefone", "Telefone", 118, "center"),
-            ("email", "Email", 200, "w"),
+            ("email", "Email", 260, "w"),
             ("obs", "Obs", 52, "center"),
         )
         for cid, title, width, anchor in col_specs:
@@ -1010,34 +1098,7 @@ class EasyFeetApp(ctk.CTk):
                 messagebox.showinfo("Edicao", "Selecione um paciente na tabela.")
                 return
             _cliente_id, cliente = selected
-            self._editing_paciente_id = cliente.id
-            title_label.configure(text=f"Editar paciente #{cliente.id}")
-            salvar_btn.configure(text="Atualizar paciente")
-            nome.delete(0, tk.END)
-            nome.insert(0, cliente.nome)
-            telefone.delete(0, tk.END)
-            telefone.insert(0, cliente.telefone or "")
-            email.delete(0, tk.END)
-            email.insert(0, cliente.email or "")
-            nascimento.delete(0, tk.END)
-            nascimento.insert(0, cliente.data_nascimento or "")
-            sexo_salvo = (cliente.sexo or "").strip()
-            sexo.set(sexo_salvo if sexo_salvo in {"Masculino", "Feminino"} else "Selecione... *")
-            lat_salva = (cliente.lateralidade or "").strip()
-            lateralidade.set(lat_salva if lat_salva in LATERALIDADE_OPCOES else "Selecione... *")
-            altura.delete(0, tk.END)
-            altura.insert(0, formatar_altura(cliente.altura_m))
-            peso.delete(0, tk.END)
-            peso.insert(0, formatar_peso(cliente.peso_kg))
-            _on_corporal_change()
-            obs.delete("1.0", "end")
-            texto_obs = (cliente.observacoes or "").strip()
-            if texto_obs:
-                obs.insert("1.0", texto_obs)
-                obs.configure(text_color="#000000")
-            else:
-                obs.insert("1.0", "Observacoes...")
-                obs.configure(text_color="#666666")
+            self._fill_paciente_edit_form(cliente)
 
         def ver_observacao() -> None:
             selected = _get_selected_cliente()
@@ -1058,6 +1119,14 @@ class EasyFeetApp(ctk.CTk):
                 return
             cliente_id, _cliente = selected
             self._open_efm_marcadores(cliente_id=cliente_id)
+
+        def _abrir_ficha_clinica() -> None:
+            selected = _get_selected_cliente()
+            if not selected:
+                messagebox.showinfo("Ficha clinica", "Selecione um paciente na tabela.")
+                return
+            cliente_id, _cliente = selected
+            self._open_paciente_hub(cliente_id)
 
         def _exportar_pdf_cadastro_branco() -> None:
             default_name = "Cadastro_Paciente_EM_BRANCO.pdf"
@@ -1130,6 +1199,18 @@ class EasyFeetApp(ctk.CTk):
         botoes_frame = ctk.CTkFrame(form, fg_color="transparent")
         botoes_frame.grid(row=6, column=0, columnspan=3, padx=8, pady=(4, 12), sticky="w")
 
+        ctk.CTkButton(
+            botoes_frame,
+            text="Novo paciente",
+            font=ctk.CTkFont(size=UI_FONT_PT),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=limpar_formulario_novo,
+        ).pack(side="left")
+
         obs_btn = ctk.CTkButton(
             botoes_frame,
             text="Ver observacao",
@@ -1169,165 +1250,18 @@ class EasyFeetApp(ctk.CTk):
         )
         marcadores_btn.pack(side="left", padx=(8, 0))
 
-        historico_box.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
-            historico_box,
-            text="Historico de marcacoes do paciente selecionado",
-            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
-            text_color="#333333",
-        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
-
-        hist_tree_host = ttk.Frame(historico_box)
-        hist_tree_host.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
-        hist_tree_host.grid_columnconfigure(0, weight=1)
-
-        hist_cols = ("momento", "tipo", "lado", "original", "marcada", "atualizado")
-        hist_tree = ttk.Treeview(hist_tree_host, columns=hist_cols, show="headings", height=4)
-        hist_tree.configure(style="EasyFeet.Treeview")
-        hist_tree.heading("momento", text="Momento")
-        hist_tree.heading("tipo", text="Tipo")
-        hist_tree.heading("lado", text="Lado")
-        hist_tree.heading("original", text="Original")
-        hist_tree.heading("marcada", text="Marcada")
-        hist_tree.heading("atualizado", text="Atualizado em")
-        hist_tree.column("momento", width=240, minwidth=200, anchor="w", stretch=False)
-        hist_tree.column("tipo", width=110, minwidth=100, anchor="center", stretch=False)
-        hist_tree.column("lado", width=90, minwidth=80, anchor="center", stretch=False)
-        hist_tree.column("original", width=90, minwidth=80, anchor="center", stretch=False)
-        hist_tree.column("marcada", width=90, minwidth=80, anchor="center", stretch=False)
-        hist_tree.column("atualizado", width=170, minwidth=150, anchor="center", stretch=False)
-        hist_tree.grid(row=0, column=0, sticky="ew")
-        hist_hsb = ttk.Scrollbar(hist_tree_host, orient="horizontal", command=hist_tree.xview)
-        hist_tree.configure(xscrollcommand=hist_hsb.set)
-        hist_hsb.grid(row=1, column=0, sticky="ew")
-
-        hist_rows: dict[str, dict[str, object]] = {}
-        hist_status = ctk.CTkLabel(
-            historico_box,
-            text="Selecione um paciente para listar as marcacoes.",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            text_color="#666666",
-        )
-        hist_status.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 6))
-
-        def _selected_hist_item() -> dict[str, object] | None:
-            sel = hist_tree.focus()
-            if not sel:
-                return None
-            return hist_rows.get(sel)
-
-        def _abrir_original_hist() -> None:
-            item = _selected_hist_item()
-            if not item:
-                messagebox.showinfo("Marcacoes", "Selecione um item no historico.")
-                return
-            p = resolve_project_file(str(item.get("path_original", "")))
-            if p is None:
-                messagebox.showerror("Marcacoes", "Imagem original nao encontrada no disco.")
-                return
-            self._open_path_external(p)
-
-        def _abrir_marcada_hist() -> None:
-            item = _selected_hist_item()
-            if not item:
-                messagebox.showinfo("Marcacoes", "Selecione um item no historico.")
-                return
-            p = resolve_project_file(str(item.get("path_marcada", "")))
-            if p is None:
-                messagebox.showerror("Marcacoes", "Imagem marcada nao encontrada no disco.")
-                return
-            self._open_path_external(p)
-
-        def _reabrir_efm_hist() -> None:
-            item = _selected_hist_item()
-            if not item:
-                messagebox.showinfo("Marcacoes", "Selecione um item no historico.")
-                return
-            cliente_id = int(item.get("cliente_id", 0))
-            if cliente_id <= 0:
-                return
-            self._open_efm_marcadores(
-                cliente_id=cliente_id,
-                momento_id=int(item.get("momento_id", 0)) or None,
-                imagem_id=int(item.get("imagem_id", 0)) or None,
-                tipo_marcador=str(item.get("tipo_marcador", "")).strip() or None,
-            )
-
-        hist_btns = ctk.CTkFrame(historico_box, fg_color="transparent")
-        hist_btns.grid(row=3, column=0, sticky="w", padx=12, pady=(0, 10))
         ctk.CTkButton(
-            hist_btns,
-            text="Ver original",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            fg_color="#ffffff",
-            text_color="#7c1229",
-            hover_color="#f0dbe1",
-            border_width=1,
-            border_color="#7c1229",
-            command=_abrir_original_hist,
-        ).pack(side="left")
-        ctk.CTkButton(
-            hist_btns,
-            text="Ver marcada",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            fg_color="#ffffff",
-            text_color="#7c1229",
-            hover_color="#f0dbe1",
-            border_width=1,
-            border_color="#7c1229",
-            command=_abrir_marcada_hist,
+            botoes_frame,
+            text="Abrir ficha clinica",
+            font=ctk.CTkFont(size=UI_FONT_PT),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=_abrir_ficha_clinica,
         ).pack(side="left", padx=(8, 0))
-        ctk.CTkButton(
-            hist_btns,
-            text="Reabrir no EFM",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            fg_color="#ffffff",
-            text_color="#7c1229",
-            hover_color="#f0dbe1",
-            border_width=1,
-            border_color="#7c1229",
-            command=_reabrir_efm_hist,
-        ).pack(side="left", padx=(8, 0))
-
-        def _refresh_marcacoes_history() -> None:
-            hist_rows.clear()
-            for row_id in hist_tree.get_children():
-                hist_tree.delete(row_id)
-            selected = _get_selected_cliente()
-            if not selected:
-                hist_status.configure(text="Selecione um paciente para listar as marcacoes.")
-                return
-            cliente_id, _cliente = selected
-            regs = self.service.marcacoes.listar_marcacoes_por_cliente(cliente_id)
-            if not regs:
-                hist_status.configure(text="Sem marcacoes salvas para este paciente.")
-                return
-            for marc, img, mom in regs:
-                momento_txt = f"{mom.data_referencia.strftime('%d/%m/%Y %H:%M')} - {(mom.rotulo or 'Momento').strip()}"
-                tipo_txt = "Linhas" if marc.tipo_marcador == "plantar_linhas" else "Pontos"
-                lado_txt = (img.lado or "nao_informado").replace("_", " ").title()
-                original_ok = "Sim" if resolve_project_file(img.path_original) else "Nao"
-                marcada_ok = "Sim" if resolve_project_file(marc.path_png_marcado) else "Nao"
-                atualizado_txt = marc.atualizado_em.strftime("%d/%m/%Y %H:%M")
-                iid = hist_tree.insert(
-                    "",
-                    "end",
-                    values=(momento_txt, tipo_txt, lado_txt, original_ok, marcada_ok, atualizado_txt),
-                )
-                hist_rows[iid] = {
-                    "cliente_id": cliente_id,
-                    "momento_id": mom.id,
-                    "imagem_id": img.id,
-                    "tipo_marcador": marc.tipo_marcador,
-                    "path_original": img.path_original,
-                    "path_marcada": marc.path_png_marcado,
-                }
-            hist_status.configure(text=f"{len(regs)} marcacao(oes) encontradas para este paciente.")
 
         self._refresh_patients_table(tree)
         self._pacientes_tree = tree
         tree.bind("<Double-1>", carregar_para_edicao)
-        tree.bind("<<TreeviewSelect>>", lambda _e: _refresh_marcacoes_history())
 
         def on_tree_click(event: tk.Event[tk.Misc]) -> None:
             region = tree.identify("region", event.x, event.y)
@@ -1344,7 +1278,68 @@ class EasyFeetApp(ctk.CTk):
             ver_observacao()
 
         tree.bind("<Button-1>", on_tree_click)
-        _refresh_marcacoes_history()
+
+        if self._pending_paciente_edit_id is not None:
+            pending_id = self._pending_paciente_edit_id
+            self._pending_paciente_edit_id = None
+            cliente = self.service.clientes.obter_por_id(pending_id)
+            if cliente is not None:
+                self._fill_paciente_edit_form(cliente)
+                for row_id in tree.get_children():
+                    vals = tree.item(row_id, "values")
+                    if vals and int(vals[0]) == pending_id:
+                        tree.selection_set(row_id)
+                        tree.focus(row_id)
+                        break
+
+    def _fill_paciente_edit_form(self, cliente: object) -> None:
+        form = self._paciente_form
+        if not form:
+            return
+        self._editing_paciente_id = int(getattr(cliente, "id"))
+        title_label = form["title_label"]
+        salvar_btn = form["salvar_btn"]
+        nome = form["nome"]
+        telefone = form["telefone"]
+        email = form["email"]
+        nascimento = form["nascimento"]
+        sexo = form["sexo"]
+        lateralidade = form["lateralidade"]
+        altura = form["altura"]
+        peso = form["peso"]
+        obs = form["obs"]
+        on_corporal = form["on_corporal_change"]
+        assert isinstance(title_label, ctk.CTkLabel)
+        assert isinstance(salvar_btn, ctk.CTkButton)
+        title_label.configure(text=f"Editar paciente #{cliente.id}")
+        salvar_btn.configure(text="Atualizar paciente")
+        for entry in (nome, telefone, email, nascimento, altura, peso):
+            assert isinstance(entry, ctk.CTkEntry)
+            entry.delete(0, tk.END)
+        assert isinstance(nome, ctk.CTkEntry)
+        nome.insert(0, cliente.nome)
+        telefone.insert(0, cliente.telefone or "")
+        email.insert(0, cliente.email or "")
+        nascimento.insert(0, cliente.data_nascimento or "")
+        sexo_salvo = (cliente.sexo or "").strip()
+        assert isinstance(sexo, ctk.CTkOptionMenu)
+        sexo.set(sexo_salvo if sexo_salvo in {"Masculino", "Feminino"} else "Selecione... *")
+        lat_salva = (cliente.lateralidade or "").strip()
+        assert isinstance(lateralidade, ctk.CTkOptionMenu)
+        lateralidade.set(lat_salva if lat_salva in LATERALIDADE_OPCOES else "Selecione... *")
+        altura.insert(0, formatar_altura(cliente.altura_m))
+        peso.insert(0, formatar_peso(cliente.peso_kg))
+        assert callable(on_corporal)
+        on_corporal()
+        assert isinstance(obs, ctk.CTkTextbox)
+        obs.delete("1.0", "end")
+        texto_obs = (cliente.observacoes or "").strip()
+        if texto_obs:
+            obs.insert("1.0", texto_obs)
+            obs.configure(text_color="#000000")
+        else:
+            obs.insert("1.0", "Observacoes...")
+            obs.configure(text_color="#666666")
 
     def _refresh_patients_table(self, tree: ttk.Treeview) -> None:
         for row in tree.get_children():
@@ -1495,7 +1490,7 @@ class EasyFeetApp(ctk.CTk):
         ).pack(side="left", padx=(8, 0))
 
     def _format_idade(self, data_nascimento: str) -> str:
-        """Converte DD/MM/AAAA para idade no formato 60a9m."""
+        """Converte DD/MM/AAAA para idade legivel (ex.: 60 anos e 7 meses)."""
         s = (data_nascimento or "").strip()
         if not s:
             return "-"
@@ -1515,7 +1510,16 @@ class EasyFeetApp(ctk.CTk):
             meses += 12
         if anos < 0:
             return "-"
-        return f"{anos}a{meses}m"
+        if anos == 0 and meses == 0:
+            return "0 meses"
+        partes: list[str] = []
+        if anos > 0:
+            partes.append("1 ano" if anos == 1 else f"{anos} anos")
+        if meses > 0:
+            partes.append("1 mês" if meses == 1 else f"{meses} meses")
+        if len(partes) == 2:
+            return f"{partes[0]} e {partes[1]}"
+        return partes[0] if partes else "-"
 
     def _module_label(self, module_id: str) -> str:
         path = find_menu_item_path(self.config_data, module_id)
@@ -1525,66 +1529,848 @@ class EasyFeetApp(ctk.CTk):
 
     def _build_placeholder(self, module_id: str) -> None:
         title = self._module_label(module_id)
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+        box = ctk.CTkFrame(frame, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        box.pack(fill="both", expand=True)
         ctk.CTkLabel(
-            self.content,
-            text=f"{title} — em breve",
+            box,
+            text=f"{title} — em construcao",
             font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
             text_color="#444444",
-        ).pack(pady=40)
+        ).pack(pady=(40, 8), padx=24)
         ctk.CTkLabel(
-            self.content,
-            text="Este modulo ja esta no menu e sera conectado ao CRUD em seguida.",
+            box,
+            text="Modulo previsto na versao 2. Sera ligado nas proximas etapas (M2, M3…).",
             font=ctk.CTkFont(size=UI_FONT_PT),
             text_color="#666666",
-        ).pack()
+            wraplength=520,
+            justify="center",
+        ).pack(pady=(0, 40), padx=24)
 
-    def _build_modulos_hub(self) -> None:
+    def _build_efm_shell_placeholder(self) -> None:
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+        box = ctk.CTkFrame(frame, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        box.pack(fill="both", expand=True)
+        ctk.CTkLabel(
+            box,
+            text=f"{self._module_label('efm_marcadores')} — Plantigrafo",
+            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+            text_color="#444444",
+        ).pack(pady=(32, 8), padx=24)
+        ctk.CTkLabel(
+            box,
+            text="Selecione um paciente na ficha clinica (Linha do tempo) e abra a analise\n"
+            "a partir do card do momento clinico.\n\n"
+            "Atalho: Pacientes → selecionar paciente → «Abrir marcadores» (momento escolhido no EFM).",
+            font=ctk.CTkFont(size=UI_FONT_PT),
+            text_color="#666666",
+            justify="center",
+        ).pack(pady=(0, 16), padx=24)
+        btn_row = ctk.CTkFrame(box, fg_color="transparent")
+        btn_row.pack(pady=(0, 32))
+        ctk.CTkButton(
+            btn_row,
+            text="Ir para Pacientes",
+            font=ctk.CTkFont(size=UI_FONT_PT),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=lambda: self._show_module("pacientes"),
+        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(
+            btn_row,
+            text="Abrir EFM (modo tecnico)",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=lambda: self._open_efm_marcadores(),
+        ).pack(side="left")
+
+    def _open_paciente_hub(self, cliente_id: int, section: str = "resumo") -> None:
+        self._hub_cliente_id = cliente_id
+        self._hub_section = section
+        self._show_module("paciente_hub")
+
+    def _set_hub_section(self, section: str) -> None:
+        self._hub_section = section
+        if self.menu_state.current_module == "paciente_hub":
+            for child in self.content.winfo_children():
+                child.destroy()
+            self._build_paciente_hub()
+
+    def _hub_momento_stats(self, cliente_id: int) -> dict[int, tuple[int, int]]:
+        marc_por_momento: dict[int, int] = {}
+        for marc, _img, mom in self.service.marcacoes.listar_marcacoes_por_cliente(cliente_id):
+            marc_por_momento[mom.id] = marc_por_momento.get(mom.id, 0) + 1
+        stats: dict[int, tuple[int, int]] = {}
+        for mom in self.service.marcacoes.listar_momentos_por_cliente(cliente_id):
+            n_img = len(self.service.marcacoes.listar_imagens_por_momento(mom.id))
+            stats[mom.id] = (n_img, marc_por_momento.get(mom.id, 0))
+        return stats
+
+    def _hub_marcacoes_por_momento(
+        self, cliente_id: int
+    ) -> dict[int, list[tuple[object, object, object]]]:
+        grouped: dict[int, list[tuple[object, object, object]]] = defaultdict(list)
+        for marc, img, mom in self.service.marcacoes.listar_marcacoes_por_cliente(cliente_id):
+            grouped[mom.id].append((marc, img, mom))
+        return dict(grouped)
+
+    def _hub_timeline_outlined_btn(self, parent: ctk.CTkFrame, text: str, command: object) -> None:
+        ctk.CTkButton(
+            parent,
+            text=text,
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            height=28,
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=command,
+        ).pack(side="left", padx=(0, 6))
+
+    def _hub_abrir_imagem(self, path_relativo: str, *, rotulo: str) -> None:
+        p = resolve_project_file(path_relativo)
+        if p is None:
+            messagebox.showerror("Marcacoes", f"{rotulo} nao encontrada no disco.")
+            return
+        self._open_path_external(p)
+
+    @staticmethod
+    def _format_lado_plantar(lado: str) -> str:
+        labels = {
+            "direito": "Direito (D)",
+            "esquerdo": "Esquerdo (E)",
+            "ambos": "Ambos",
+            "nao_informado": "Nao informado",
+        }
+        return labels.get(lado, (lado or "nao_informado").replace("_", " ").title())
+
+    def _hub_plantigrafo_imagens_agrupadas(
+        self, momento_id: int, items: list[tuple[object, object, object]]
+    ) -> list[dict[str, object]]:
+        by_img: dict[int, dict[str, object]] = {}
+        for marc, img, mom in items:
+            iid = int(getattr(img, "id", 0))
+            if iid not in by_img:
+                by_img[iid] = {"img": img, "mom": mom, "marcacoes": []}
+            cast_marc = by_img[iid]["marcacoes"]
+            assert isinstance(cast_marc, list)
+            cast_marc.append(marc)
+        for img in self.service.marcacoes.listar_imagens_por_momento(momento_id):
+            if img.id not in by_img:
+                by_img[img.id] = {"img": img, "mom": None, "marcacoes": []}
+        return [by_img[k] for k in sorted(by_img.keys(), reverse=True)]
+
+    def _render_hub_plantigrafo_momento_block(
+        self,
+        parent: ctk.CTkFrame,
+        *,
+        cliente_id: int,
+        momento_id: int,
+        items: list[tuple[object, object, object]],
+    ) -> None:
+        block = ctk.CTkFrame(parent, fg_color="#ffffff", corner_radius=8, border_width=1, border_color="#e8ecf2")
+        block.pack(fill="x", padx=14, pady=(0, 10))
+
+        grupos = self._hub_plantigrafo_imagens_agrupadas(momento_id, items)
+        n_linhas = sum(
+            1
+            for g in grupos
+            for m in g["marcacoes"]  # type: ignore[union-attr]
+            if getattr(m, "tipo_marcador", "") == "plantar_linhas"
+        )
+        n_pontos = sum(
+            1
+            for g in grupos
+            for m in g["marcacoes"]  # type: ignore[union-attr]
+            if getattr(m, "tipo_marcador", "") == "plantar_pontos"
+        )
+        resumo_partes = [f"{len(grupos)} imagem(ns)"]
+        if n_linhas:
+            resumo_partes.append(f"Linhas: {n_linhas}")
+        if n_pontos:
+            resumo_partes.append(f"Pontos: {n_pontos}")
+        resumo = " · ".join(resumo_partes)
+
+        ctk.CTkLabel(
+            block,
+            text="Plantigrafo",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1, weight="bold"),
+            text_color="#5b0717",
+            anchor="w",
+        ).pack(anchor="w", padx=12, pady=(10, 2))
+        ctk.CTkLabel(
+            block,
+            text=resumo,
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            text_color="#666666",
+            anchor="w",
+        ).pack(anchor="w", padx=12, pady=(0, 8))
+
+        for grupo in grupos:
+            img = grupo["img"]
+            marcacoes = grupo["marcacoes"]
+            assert isinstance(marcacoes, list)
+            lado = self._format_lado_plantar(str(getattr(img, "lado", "") or "nao_informado"))
+            has_linhas = any(getattr(m, "tipo_marcador", "") == "plantar_linhas" for m in marcacoes)
+            has_pontos = any(getattr(m, "tipo_marcador", "") == "plantar_pontos" for m in marcacoes)
+            estado: list[str] = []
+            if has_linhas:
+                estado.append("Linhas salvas")
+            if has_pontos:
+                estado.append("Pontos salvos")
+            if not estado:
+                estado.append("Sem marcacoes")
+            row = ctk.CTkFrame(block, fg_color="transparent")
+            row.pack(fill="x", padx=10, pady=(0, 6))
+            ctk.CTkLabel(
+                row,
+                text=f"· {lado} — {' · '.join(estado)}",
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                text_color="#444444",
+                anchor="w",
+            ).pack(side="left", padx=(4, 8))
+            btns = ctk.CTkFrame(row, fg_color="transparent")
+            btns.pack(side="right")
+            imagem_id = int(getattr(img, "id", 0))
+            path_original = str(getattr(img, "path_original", ""))
+            marc_por_tipo = {str(getattr(m, "tipo_marcador", "")): m for m in marcacoes}
+            for tipo_marcador, rotulo_btn in (
+                ("plantar_linhas", "Linhas"),
+                ("plantar_pontos", "Pontos"),
+            ):
+                self._hub_timeline_outlined_btn(
+                    btns,
+                    rotulo_btn,
+                    lambda cid=cliente_id, mid=momento_id, iid=imagem_id, tm=tipo_marcador: self._open_efm_marcadores(
+                        cliente_id=cid, momento_id=mid, imagem_id=iid, tipo_marcador=tm
+                    ),
+                )
+            self._hub_timeline_outlined_btn(
+                btns,
+                "Original",
+                lambda p=path_original: self._hub_abrir_imagem(p, rotulo="Imagem original"),
+            )
+            for tipo_marcador, rotulo_btn in (("plantar_linhas", "Marcada L"), ("plantar_pontos", "Marcada P")):
+                marc = marc_por_tipo.get(tipo_marcador)
+                if marc is None:
+                    continue
+                path_marcada = str(getattr(marc, "path_png_marcado", ""))
+                self._hub_timeline_outlined_btn(
+                    btns,
+                    rotulo_btn,
+                    lambda p=path_marcada: self._hub_abrir_imagem(p, rotulo="Imagem marcada"),
+                )
+
+        btn_row = ctk.CTkFrame(block, fg_color="transparent")
+        btn_row.pack(anchor="w", padx=12, pady=(0, 10))
+        ctk.CTkButton(
+            btn_row,
+            text="Abrir Plantigrafo neste momento",
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            height=30,
+            command=lambda cid=cliente_id, mid=momento_id: self._open_efm_marcadores(cliente_id=cid, momento_id=mid),
+        ).pack(side="left")
+
+        ctk.CTkLabel(block, text="").pack(pady=2)
+
+    @staticmethod
+    def _hub_momentos_agrupados_por_dia(momentos: list[object]) -> list[tuple[date, list[object]]]:
+        grupos: dict[date, list[object]] = {}
+        ordem_dias: list[date] = []
+        for mom in momentos:
+            ref = getattr(mom, "data_referencia", None)
+            if ref is None:
+                continue
+            dia = ref.date() if hasattr(ref, "date") else ref
+            if dia not in grupos:
+                grupos[dia] = []
+                ordem_dias.append(dia)
+            grupos[dia].append(mom)
+        return [(d, grupos[d]) for d in ordem_dias]
+
+    def _render_hub_momento_subcard(
+        self,
+        parent: ctk.CTkFrame,
+        *,
+        cliente_id: int,
+        mom: object,
+        marcacoes_por_mom: dict[int, list[tuple[object, object, object]]],
+    ) -> None:
+        rotulo = (getattr(mom, "rotulo", "") or "Momento").strip()
+        ref = getattr(mom, "data_referencia", None)
+        hora = ref.strftime("%H:%M") if ref is not None else "--:--"
+        momento_id = int(getattr(mom, "id", 0))
+
+        card = ctk.CTkFrame(parent, fg_color="#ffffff", corner_radius=8, border_width=1, border_color="#e4e8ef")
+        card.pack(fill="x", padx=12, pady=(0, 8))
+
+        titulo_row = ctk.CTkFrame(card, fg_color="transparent")
+        titulo_row.pack(fill="x", padx=12, pady=(10, 0))
+        ctk.CTkLabel(
+            titulo_row,
+            text=f"{hora} — {rotulo}",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1, weight="bold"),
+            text_color="#333333",
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            titulo_row,
+            text="Editar",
+            width=72,
+            height=28,
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=lambda mid=momento_id: self._hub_dialog_editar_momento(cliente_id, mid),
+        ).pack(side="right")
+
+        obs_mom = (getattr(mom, "observacoes", "") or "").strip()
+        if obs_mom:
+            ctk.CTkLabel(
+                card,
+                text=obs_mom,
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                text_color="#555555",
+                wraplength=520,
+                justify="left",
+                anchor="w",
+            ).pack(anchor="w", padx=12, pady=(6, 8))
+        else:
+            ctk.CTkLabel(card, text="").pack(pady=2)
+
+        items = marcacoes_por_mom.get(momento_id, [])
+        if items or self.service.marcacoes.listar_imagens_por_momento(momento_id):
+            self._render_hub_plantigrafo_momento_block(
+                card, cliente_id=cliente_id, momento_id=momento_id, items=items
+            )
+        else:
+            ctk.CTkLabel(
+                card,
+                text="Ainda sem exames neste momento. Use «Abrir Plantigrafo» abaixo\n"
+                "ou o atalho Plantigrafo na barra lateral da ficha.",
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                text_color="#888888",
+                wraplength=520,
+                justify="left",
+                anchor="w",
+            ).pack(anchor="w", padx=12, pady=(0, 8))
+            btn_row = ctk.CTkFrame(card, fg_color="transparent")
+            btn_row.pack(anchor="w", padx=12, pady=(0, 10))
+            ctk.CTkButton(
+                btn_row,
+                text="Abrir Plantigrafo (Analise)",
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                fg_color="#7c1229",
+                hover_color="#5b0717",
+                height=30,
+                command=lambda cid=cliente_id, mid=momento_id: self._open_efm_marcadores(cliente_id=cid, momento_id=mid),
+            ).pack(side="left")
+
+    def _render_hub_dia_timeline_group(
+        self,
+        parent: ctk.CTkScrollableFrame,
+        *,
+        dia: date,
+        momentos_dia: list[object],
+        cliente_id: int,
+        marcacoes_por_mom: dict[int, list[tuple[object, object, object]]],
+    ) -> None:
+        n = len(momentos_dia)
+        contagem = "1 momento" if n == 1 else f"{n} momentos"
+        group = ctk.CTkFrame(parent, fg_color="#eef1f6", corner_radius=10, border_width=1, border_color="#d8dee8")
+        group.pack(fill="x", padx=18, pady=(0, 14))
+        ctk.CTkLabel(
+            group,
+            text=f"{dia.strftime('%d/%m/%Y')}  ·  {contagem}",
+            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+            text_color="#5b0717",
+            anchor="w",
+        ).pack(anchor="w", padx=14, pady=(12, 8))
+        for mom in momentos_dia:
+            self._render_hub_momento_subcard(
+                group,
+                cliente_id=cliente_id,
+                mom=mom,
+                marcacoes_por_mom=marcacoes_por_mom,
+            )
+        ctk.CTkLabel(group, text="").pack(pady=2)
+
+    def _hub_dialog_novo_momento(self, cliente_id: int) -> None:
+        self._hub_dialog_momento(cliente_id, momento_id=None)
+
+    def _hub_dialog_editar_momento(self, cliente_id: int, momento_id: int) -> None:
+        self._hub_dialog_momento(cliente_id, momento_id=momento_id)
+
+    def _hub_dialog_momento(self, cliente_id: int, *, momento_id: int | None) -> None:
+        editando = momento_id is not None
+        momento = self.service.marcacoes.obter_momento(momento_id) if editando else None
+        if editando and momento is None:
+            messagebox.showerror("Momento clinico", "Momento nao encontrado.")
+            return
+
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Editar momento clinico" if editando else "Novo momento clinico")
+        dlg.geometry("460x420")
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        dlg.grab_set()
+
+        frame = ctk.CTkFrame(dlg, fg_color="#ffffff")
+        frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+        if editando and momento is not None:
+            when_txt = momento.data_referencia.strftime("%d/%m/%Y %H:%M")
+            ctk.CTkLabel(
+                frame,
+                text=f"Data e hora do registo: {when_txt}",
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                text_color="#666666",
+                anchor="w",
+            ).pack(anchor="w", pady=(0, 10))
+        else:
+            ctk.CTkLabel(
+                frame,
+                text="Registo do que foi feito neste atendimento (data/hora gravadas ao criar).\n"
+                "Depois associe exames no Plantigrafo ou Podoscopio a este momento.",
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                text_color="#666666",
+                wraplength=400,
+                justify="left",
+            ).pack(anchor="w", pady=(0, 10))
+
+        ctk.CTkLabel(
+            frame,
+            text=f"Rotulo (max. {MOMENTO_ROTULO_MAX} caracteres)",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+        ).pack(anchor="w", pady=(0, 4))
+        rotulo_entry = ctk.CTkEntry(frame, font=ctk.CTkFont(size=UI_FONT_PT), height=36)
+        rotulo_entry.pack(fill="x", pady=(0, 10))
+        now = datetime.now()
+        if editando and momento is not None:
+            rotulo_entry.insert(0, (momento.rotulo or "").strip())
+        else:
+            rotulo_entry.insert(0, f"Consulta {now.strftime('%d/%m/%Y')}")
+
+        ctk.CTkLabel(
+            frame,
+            text=f"Observacoes — o que foi feito (max. {MOMENTO_OBSERVACOES_MAX} caracteres)",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+        ).pack(anchor="w", pady=(0, 4))
+        obs_box = ctk.CTkTextbox(
+            frame,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            height=120,
+            border_width=1,
+            border_color="#b8b8b8",
+            fg_color="#ffffff",
+        )
+        obs_box.pack(fill="x", pady=(0, 8))
+        if editando and momento is not None and (momento.observacoes or "").strip():
+            obs_box.insert("1.0", (momento.observacoes or "").strip())
+
+        def gravar() -> None:
+            rotulo = rotulo_entry.get()
+            obs = obs_box.get("1.0", "end-1c")
+            try:
+                if editando and momento_id is not None:
+                    self.service.atualizar_momento_clinico(momento_id, rotulo, obs)
+                else:
+                    self.service.criar_momento_clinico(cliente_id, rotulo, now, obs)
+            except ValueError as exc:
+                messagebox.showerror("Momento clinico", str(exc), parent=dlg)
+                return
+            dlg.destroy()
+            self._set_hub_section("timeline")
+            if editando:
+                messagebox.showinfo("Momento clinico", "Momento actualizado.")
+            else:
+                messagebox.showinfo(
+                    "Momento clinico",
+                    "Momento criado.\n\n"
+                    "Na Linha do tempo aparece o card. Para exames e marcacoes:\n"
+                    "Plantigrafo → Analise ou Abrir marcadores em Pacientes.",
+                )
+
+        btns = ctk.CTkFrame(frame, fg_color="transparent")
+        btns.pack(fill="x", pady=(8, 0))
+        ctk.CTkButton(
+            btns,
+            text="Cancelar",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=dlg.destroy,
+        ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(
+            btns,
+            text="Gravar",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=gravar,
+        ).pack(side="right")
+
+        rotulo_entry.focus_set()
+        dlg.after(100, rotulo_entry.focus_set)
+
+    def _hub_atalho_modulo(self, modulo: str) -> None:
+        cliente_id = self._hub_cliente_id
+        if not cliente_id:
+            messagebox.showinfo("Ficha clinica", "Nenhum paciente seleccionado.")
+            return
+        if modulo == "podoscopio":
+            messagebox.showinfo(
+                "Ficha clinica",
+                "Atalho Podoscopio com contexto do paciente chega numa etapa futura.\n\n"
+                "Por agora use Podoscopio no menu lateral.",
+            )
+            return
+        if modulo != "plantigrafo":
+            return
+        momentos = self.service.marcacoes.listar_momentos_por_cliente(cliente_id)
+        if not momentos:
+            if messagebox.askyesno(
+                "Plantigrafo",
+                "Este paciente ainda nao tem momentos clinicos.\n\nDeseja criar um agora?",
+            ):
+                self._hub_dialog_novo_momento(cliente_id)
+                momentos = self.service.marcacoes.listar_momentos_por_cliente(cliente_id)
+        if not momentos:
+            return
+        momento_id = int(momentos[0].id)
+        self._open_efm_marcadores(cliente_id=cliente_id, momento_id=momento_id)
+
+    def _build_paciente_hub(self) -> None:
+        cliente_id = self._hub_cliente_id
+        if not cliente_id:
+            messagebox.showinfo("Ficha clinica", "Nenhum paciente seleccionado.")
+            self._show_module("pacientes")
+            return
+        cliente = self.service.clientes.obter_por_id(cliente_id)
+        if cliente is None:
+            messagebox.showerror("Ficha clinica", "Paciente nao encontrado.")
+            self._hub_cliente_id = None
+            self._show_module("pacientes")
+            return
+
+        root = ctk.CTkFrame(self.content, fg_color="transparent")
+        root.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        root.grid_columnconfigure(1, weight=1)
+        root.grid_rowconfigure(1, weight=1)
+
+        hdr = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        hdr.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+        hdr.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            hdr,
+            text="← Pacientes",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            width=120,
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=lambda: self._show_module("pacientes"),
+        ).grid(row=0, column=0, padx=(14, 10), pady=14, sticky="w")
+
+        idade_txt = self._format_idade(cliente.data_nascimento or "")
+        titulo = f"{cliente.nome}  (#{cliente.id})"
+        if idade_txt != "-":
+            titulo += f"  ·  {idade_txt}"
+        ctk.CTkLabel(
+            hdr,
+            text=titulo,
+            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+            text_color="#333333",
+        ).grid(row=0, column=1, sticky="w", pady=14)
+
+        def _editar_cadastro() -> None:
+            self._pending_paciente_edit_id = cliente.id
+            self._show_module("pacientes")
+
+        ctk.CTkButton(
+            hdr,
+            text="Editar cadastro",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=_editar_cadastro,
+        ).grid(row=0, column=2, padx=14, pady=14, sticky="e")
+
+        body = ctk.CTkFrame(root, fg_color="transparent")
+        body.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+
+        nav = ctk.CTkFrame(body, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec", width=210)
+        nav.grid(row=0, column=0, sticky="nsw", padx=(0, 12))
+        nav.grid_propagate(False)
+
+        nav_sections: tuple[tuple[str, str, bool], ...] = (
+            ("resumo", "Resumo", True),
+            ("timeline", "Linha do tempo", True),
+            ("laudos", "Laudos", False),
+            ("palmilhas", "Palmilhas", False),
+        )
+        ctk.CTkLabel(
+            nav,
+            text="Secoes",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1, weight="bold"),
+            text_color="#333333",
+        ).pack(anchor="w", padx=14, pady=(14, 8))
+
+        for sec_id, label, enabled in nav_sections:
+            active = self._hub_section == sec_id
+            if enabled:
+                ctk.CTkButton(
+                    nav,
+                    text=label,
+                    font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                    anchor="w",
+                    height=36,
+                    fg_color="#dbe8ff" if active else "#ffffff",
+                    text_color="#232323",
+                    hover_color="#e9eefc",
+                    command=lambda s=sec_id: self._set_hub_section(s),
+                ).pack(fill="x", padx=12, pady=3)
+            else:
+                ctk.CTkButton(
+                    nav,
+                    text=f"{label}  (em breve)",
+                    font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                    anchor="w",
+                    height=36,
+                    fg_color="#f4f4f4",
+                    text_color="#999999",
+                    hover_color="#f4f4f4",
+                    state="disabled",
+                ).pack(fill="x", padx=12, pady=3)
+
+        ctk.CTkLabel(nav, text="Atalhos", font=ctk.CTkFont(size=UI_FONT_PT - 2, weight="bold"), text_color="#666666").pack(
+            anchor="w", padx=14, pady=(16, 6)
+        )
+        for mod_id, mod_label in (("plantigrafo", "Plantigrafo"), ("podoscopio", "Podoscopio")):
+            ctk.CTkButton(
+                nav,
+                text=mod_label,
+                font=ctk.CTkFont(size=UI_FONT_PT - 2),
+                anchor="w",
+                height=32,
+                fg_color="#ffffff",
+                text_color="#7c1229",
+                hover_color="#f0dbe1",
+                border_width=1,
+                border_color="#dcc0c6",
+                command=lambda m=mod_id: self._hub_atalho_modulo(m),
+            ).pack(fill="x", padx=12, pady=2)
+        ctk.CTkLabel(nav, text="").pack(pady=8)
+
+        self._hub_content_host = ctk.CTkScrollableFrame(
+            body,
+            fg_color="#ffffff",
+            corner_radius=12,
+            border_width=1,
+            border_color="#ececec",
+            scrollbar_button_color="#b8b8b8",
+            scrollbar_button_hover_color="#7c1229",
+        )
+        self._hub_content_host.grid(row=0, column=1, sticky="nsew")
+        self._render_hub_section_content()
+
+    def _render_hub_section_content(self) -> None:
+        host = self._hub_content_host
+        cliente_id = self._hub_cliente_id
+        if host is None or not cliente_id:
+            return
+        for child in host.winfo_children():
+            child.destroy()
+        cliente = self.service.clientes.obter_por_id(cliente_id)
+        if cliente is None:
+            return
+
+        section = self._hub_section
+        pad = {"padx": 18, "pady": (16, 8)}
+
+        if section == "resumo":
+            ctk.CTkLabel(
+                host,
+                text="Resumo",
+                font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+                text_color="#333333",
+            ).pack(anchor="w", **pad)
+            imc_val = formatar_imc(calcular_imc(cliente.altura_m, cliente.peso_kg))
+            linhas = [
+                f"Sexo: {(cliente.sexo or '—')}",
+                f"Telefone: {(cliente.telefone or '—')}",
+                f"Email: {(cliente.email or '—')}",
+                f"Altura: {formatar_altura(cliente.altura_m) or '—'} m",
+                f"Peso: {formatar_peso(cliente.peso_kg) or '—'} kg",
+                f"IMC: {imc_val}",
+                f"Lateralidade: {(cliente.lateralidade or '—')}",
+            ]
+            for ln in linhas:
+                ctk.CTkLabel(host, text=ln, font=ctk.CTkFont(size=UI_FONT_PT - 1), text_color="#444444", anchor="w").pack(
+                    anchor="w", padx=18, pady=2
+                )
+            ctk.CTkLabel(
+                host,
+                text="Avaliacao inicial (observacoes do cadastro)",
+                font=ctk.CTkFont(size=UI_FONT_PT - 1, weight="bold"),
+                text_color="#333333",
+            ).pack(anchor="w", padx=18, pady=(16, 6))
+            obs_txt = (cliente.observacoes or "").strip() or "Sem observacoes registadas."
+            ctk.CTkLabel(
+                host,
+                text=obs_txt,
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#555555",
+                wraplength=640,
+                justify="left",
+            ).pack(anchor="w", padx=18, pady=(0, 12))
+            ctk.CTkLabel(host, text="Ultimos laudos: nenhum laudo registado (fase v2).", font=ctk.CTkFont(size=UI_FONT_PT - 2), text_color="#888888").pack(
+                anchor="w", padx=18, pady=2
+            )
+            ctk.CTkLabel(host, text="Palmilhas em andamento: nenhum pedido (fase v3).", font=ctk.CTkFont(size=UI_FONT_PT - 2), text_color="#888888").pack(
+                anchor="w", padx=18, pady=2
+            )
+            ctk.CTkButton(
+                host,
+                text="+ Novo momento clinico",
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                fg_color="#7c1229",
+                hover_color="#5b0717",
+                command=lambda: self._hub_dialog_novo_momento(cliente_id),
+            ).pack(anchor="w", padx=18, pady=(18, 24))
+            return
+
+        if section == "timeline":
+            ctk.CTkLabel(
+                host,
+                text="Linha do tempo",
+                font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+                text_color="#333333",
+            ).pack(anchor="w", **pad)
+            momentos = self.service.marcacoes.listar_momentos_por_cliente(cliente_id)
+            marcacoes_por_mom = self._hub_marcacoes_por_momento(cliente_id)
+            if not momentos:
+                ctk.CTkLabel(
+                    host,
+                    text="Nenhum momento clinico. Use «Novo momento» no Resumo ou crie marcacoes no Plantigrafo.",
+                    font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                    text_color="#666666",
+                    wraplength=640,
+                    justify="left",
+                ).pack(anchor="w", padx=18, pady=(0, 16))
+                ctk.CTkButton(
+                    host,
+                    text="+ Novo momento clinico",
+                    font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                    fg_color="#7c1229",
+                    hover_color="#5b0717",
+                    command=lambda: self._hub_dialog_novo_momento(cliente_id),
+                ).pack(anchor="w", padx=18, pady=(0, 24))
+                return
+            for dia, momentos_dia in self._hub_momentos_agrupados_por_dia(momentos):
+                self._render_hub_dia_timeline_group(
+                    host,
+                    dia=dia,
+                    momentos_dia=momentos_dia,
+                    cliente_id=cliente_id,
+                    marcacoes_por_mom=marcacoes_por_mom,
+                )
+            ctk.CTkButton(
+                host,
+                text="+ Novo momento clinico",
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                fg_color="#7c1229",
+                hover_color="#5b0717",
+                command=lambda: self._hub_dialog_novo_momento(cliente_id),
+            ).pack(anchor="w", padx=18, pady=(8, 24))
+            return
+
+        ctk.CTkLabel(
+            host,
+            text="Secao em construcao.",
+            font=ctk.CTkFont(size=UI_FONT_PT),
+            text_color="#666666",
+        ).pack(pady=40)
+
+    def _build_paciente_hub_placeholder(self) -> None:
+        self._build_placeholder("paciente_hub")
+
+    def _build_module_hub(
+        self,
+        *,
+        parent_id: str,
+        intro: str,
+        child_ids: tuple[str, ...],
+    ) -> None:
         root = ctk.CTkFrame(self.content, fg_color="transparent")
         root.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         box = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
         box.pack(fill="both", expand=True)
         ctk.CTkLabel(
             box,
-            text=self._module_label("modulos"),
+            text=self._module_label(parent_id),
             font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
             text_color="#333333",
         ).pack(anchor="w", padx=18, pady=(18, 6))
         ctk.CTkLabel(
             box,
-            text="Ferramentas clinicas e de analise. Escolha um modulo abaixo ou use o menu lateral.",
+            text=intro,
             font=ctk.CTkFont(size=UI_FONT_PT - 1),
             text_color="#666666",
+            wraplength=640,
+            justify="left",
         ).pack(anchor="w", padx=18, pady=(0, 14))
-        ctk.CTkButton(
-            box,
-            text=self._module_label("efm_marcadores"),
-            font=ctk.CTkFont(size=UI_FONT_PT),
-            anchor="w",
-            height=40,
-            fg_color="#7c1229",
-            hover_color="#5b0717",
-            command=lambda: self._show_module("efm_marcadores"),
-        ).pack(fill="x", padx=18, pady=(0, 8))
-        ctk.CTkButton(
-            box,
-            text=self._module_label("avaliacao_postural"),
-            font=ctk.CTkFont(size=UI_FONT_PT),
-            anchor="w",
-            height=40,
-            fg_color="#7c1229",
-            hover_color="#5b0717",
-            command=lambda: self._show_module("avaliacao_postural"),
-        ).pack(fill="x", padx=18, pady=(0, 8))
-        ctk.CTkButton(
-            box,
-            text=self._module_label("podoscopio"),
-            font=ctk.CTkFont(size=UI_FONT_PT),
-            anchor="w",
-            height=40,
-            fg_color="#7c1229",
-            hover_color="#5b0717",
-            command=lambda: self._show_module("podoscopio"),
-        ).pack(fill="x", padx=18, pady=(0, 18))
+        for cid in child_ids:
+            ctk.CTkButton(
+                box,
+                text=self._module_label(cid),
+                font=ctk.CTkFont(size=UI_FONT_PT),
+                anchor="w",
+                height=40,
+                fg_color="#7c1229",
+                hover_color="#5b0717",
+                command=lambda m=cid: self._show_module(m),
+            ).pack(fill="x", padx=18, pady=(0, 8))
+        ctk.CTkLabel(box, text="").pack(pady=4)
+
+    def _build_plantigrafo_hub(self) -> None:
+        self._build_module_hub(
+            parent_id="plantigrafo",
+            intro="Analise de imagens plantares (EFM), laudos e configuracao das regras de marcadores.",
+            child_ids=("efm_marcadores", "plantigrafo_laudos", "plantigrafo_config"),
+        )
+
+    def _build_avaliacao_postural_hub(self) -> None:
+        self._build_module_hub(
+            parent_id="avaliacao_postural",
+            intro="Modulo de avaliacao postural (em construcao).",
+            child_ids=("postural_avaliacao", "postural_laudos", "postural_config"),
+        )
+
+    def _build_modulos_hub(self) -> None:
+        self._build_plantigrafo_hub()
 
     @staticmethod
     def _podoscopio_text_get(widget: tk.Text) -> str:
@@ -1621,32 +2407,11 @@ class EasyFeetApp(ctk.CTk):
         return frame, text
 
     def _build_podoscopio_hub(self) -> None:
-        root = ctk.CTkFrame(self.content, fg_color="transparent")
-        root.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-        box = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
-        box.pack(fill="both", expand=True)
-        ctk.CTkLabel(
-            box,
-            text=self._module_label("podoscopio"),
-            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
-            text_color="#333333",
-        ).pack(anchor="w", padx=18, pady=(18, 6))
-        ctk.CTkLabel(
-            box,
-            text="Avaliacao com podoscopio integrada ao cadastro de pacientes. Escolha uma opcao abaixo.",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            text_color="#666666",
-        ).pack(anchor="w", padx=18, pady=(0, 14))
-        ctk.CTkButton(
-            box,
-            text=self._module_label("podoscopio_ficha_tecnica"),
-            font=ctk.CTkFont(size=UI_FONT_PT),
-            anchor="w",
-            height=40,
-            fg_color="#7c1229",
-            hover_color="#5b0717",
-            command=lambda: self._show_module("podoscopio_ficha_tecnica"),
-        ).pack(fill="x", padx=18, pady=(0, 18))
+        self._build_module_hub(
+            parent_id="podoscopio",
+            intro="Ficha tecnica, laudos e configuracoes do podoscopio. Selecione uma opcao abaixo ou use o menu lateral.",
+            child_ids=("podoscopio_ficha_tecnica", "podoscopio_laudos", "podoscopio_config"),
+        )
 
     def _build_podoscopio_ficha_tecnica(self) -> None:
         """Ficha tecnica de podoscopia: edicao, gravacao na BD e exportacao PDF."""
@@ -2143,32 +2908,11 @@ class EasyFeetApp(ctk.CTk):
                     _refresh_fichas_combo(select_ficha_id=regs[0].id)
 
     def _build_configuracoes_hub(self) -> None:
-        root = ctk.CTkFrame(self.content, fg_color="transparent")
-        root.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-        box = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
-        box.pack(fill="both", expand=True)
-        ctk.CTkLabel(
-            box,
-            text="Configuracoes",
-            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
-            text_color="#333333",
-        ).pack(anchor="w", padx=18, pady=(18, 6))
-        ctk.CTkLabel(
-            box,
-            text="Escolha uma area abaixo. Outras opcoes podem ser adicionadas aqui no futuro.",
-            font=ctk.CTkFont(size=UI_FONT_PT - 1),
-            text_color="#666666",
-        ).pack(anchor="w", padx=18, pady=(0, 14))
-        ctk.CTkButton(
-            box,
-            text="Regras Marcadores",
-            font=ctk.CTkFont(size=UI_FONT_PT),
-            anchor="w",
-            height=40,
-            fg_color="#7c1229",
-            hover_color="#5b0717",
-            command=lambda: self._show_module("configuracoes_regras_marcadores"),
-        ).pack(fill="x", padx=18, pady=(0, 18))
+        self._build_module_hub(
+            parent_id="configuracoes",
+            intro="Configuracoes globais da clinica. Regras dos marcadores estao em Plantigrafo > Configuracoes.",
+            child_ids=("config_clinica", "config_usuarios", "config_licencas", "config_templates_pdf"),
+        )
 
     def _build_configuracoes_regras_marcadores(self) -> None:
         root = ctk.CTkFrame(self.content, fg_color="transparent")
@@ -2180,7 +2924,7 @@ class EasyFeetApp(ctk.CTk):
         header.grid(row=0, column=0, sticky="ew")
         ctk.CTkLabel(
             header,
-            text="Configuracoes / Regras Marcadores",
+            text=f"{self._module_label('plantigrafo')} / {self._module_label('plantigrafo_config')}",
             font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
             text_color="#333333",
         ).pack(anchor="w", padx=14, pady=(10, 2))

@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "menu-config-v1.json"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "menu-config-v2.json"
+LEGACY_CONFIG_PATH = Path(__file__).resolve().parents[1] / "menu-config-v1.json"
 
 
 class MenuConfigError(Exception):
@@ -30,9 +31,15 @@ def get_visible_menu_for_role(config: dict[str, Any], role: str) -> list[dict[st
     visible = [
         item
         for item in config.get("menu", [])
-        if role in item.get("visibleFor", [])
+        if role in item.get("visibleFor", []) and not item.get("hiddenInSidebar")
     ]
     return sorted(visible, key=lambda x: x.get("order", 9999))
+
+
+def iter_menu_roots_for_role(config: dict[str, Any], role: str) -> list[dict[str, Any]]:
+    """Itens raiz visíveis para o perfil (inclui hiddenInSidebar — ex.: ficha clínica)."""
+    roots = [item for item in config.get("menu", []) if role in item.get("visibleFor", [])]
+    return sorted(roots, key=lambda x: x.get("order", 9999))
 
 
 def get_visible_child_menu_items(parent_item: dict[str, Any], role: str) -> list[dict[str, Any]]:
@@ -56,7 +63,7 @@ def collect_nav_module_ids_for_role(config: dict[str, Any], role: str) -> set[st
             walk(ch)
 
     ids: set[str] = set()
-    for item in get_visible_menu_for_role(config, role):
+    for item in iter_menu_roots_for_role(config, role):
         walk(item)
     return ids
 

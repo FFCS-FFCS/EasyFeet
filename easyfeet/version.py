@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-APP_VERSION_MAJOR = 1
+APP_VERSION_MAJOR = 2
 APP_VERSION_MINOR = 0
 APP_VERSION_PATCH = 0
 

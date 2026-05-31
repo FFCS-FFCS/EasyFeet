@@ -17,6 +17,7 @@ from marcador_pontos.definitions import (
 )
 from easyfeet_markers.collapsible import CollapsibleFooter
 from easyfeet_markers.ui_style import (
+    EFM_SHELL_GUTTER,
     EFM_UI_FONT_PANEL,
     EFM_UI_FONT_PANEL_HINT,
     format_rules_path_short,
@@ -50,7 +51,7 @@ class PontosReferenciasPanel(ttk.Frame):
             self._ui_font = ("Segoe UI", ui_font_pt)
         hint_pt = ui_font_hint_pt if ui_font_hint_pt is not None else (EFM_UI_FONT_PANEL_HINT[1] if compact_ui else ui_font_pt)
         self._ui_font_hint: tuple[str, int] = ("Segoe UI", hint_pt) if compact_ui else self._ui_font
-        self._pad_row = (4, 0, 4, 4) if compact_ui else (8, 0, 8, 8)
+        self._pad_row = (EFM_SHELL_GUTTER, 0, EFM_SHELL_GUTTER, 4) if compact_ui else (8, 0, 8, 8)
         self._tk = self.winfo_toplevel()
 
         self._source_path: Path | None = None
@@ -159,7 +160,10 @@ class PontosReferenciasPanel(ttk.Frame):
         self._combo_rule.pack(side="left", padx=(0, 10))
         tune_combobox_font(self._combo_rule, self._ui_font[1])
 
-        rule_path = ttk.Frame(self, padding=(4, 0, 4, 2) if self._compact_ui else (8, 0, 8, 4))
+        rule_path = ttk.Frame(
+            self,
+            padding=(EFM_SHELL_GUTTER, 0, EFM_SHELL_GUTTER, 2) if self._compact_ui else (8, 0, 8, 4),
+        )
         rule_path.pack(fill="x")
         rp = find_marker_rules_json()
         if self._compact_ui:
@@ -192,7 +196,7 @@ class PontosReferenciasPanel(ttk.Frame):
         zoom_combo = ttk.Combobox(
             row2,
             textvariable=self._var_zoom,
-            values=["100%", "200%", "300%", "400%"],
+            values=["100%", "150%", "200%", "250%", "300%", "350%", "400%"],
             state="readonly",
             width=7,
         )
@@ -200,7 +204,10 @@ class PontosReferenciasPanel(ttk.Frame):
         zoom_combo.bind("<<ComboboxSelected>>", self._on_zoom_change)
         tune_combobox_font(zoom_combo, self._ui_font[1])
 
-        hint_row = ttk.Frame(self, padding=(4, 0, 4, 4) if self._compact_ui else (8, 0, 8, 4))
+        hint_row = ttk.Frame(
+            self,
+            padding=(EFM_SHELL_GUTTER, 0, EFM_SHELL_GUTTER, 4) if self._compact_ui else (8, 0, 8, 4),
+        )
         hint_row.pack(fill="x")
         self._lbl_hint = ttk.Label(
             hint_row,
@@ -208,10 +215,10 @@ class PontosReferenciasPanel(ttk.Frame):
             font=self._ui_font_hint if self._compact_ui else self._ui_font,
             wraplength=720 if self._compact_ui else 0,
         )
-        self._lbl_hint.pack(anchor="w", padx=4)
+        self._lbl_hint.pack(anchor="w")
 
         pan = ttk.Frame(self)
-        pan.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        pan.pack(fill="both", expand=True, padx=EFM_SHELL_GUTTER if self._compact_ui else 8, pady=(0, 8))
 
         self._canvas = tk.Canvas(pan, bg="#ffffff", highlightthickness=0)
         self._canvas.grid(row=0, column=0, sticky="nsew")
@@ -233,7 +240,7 @@ class PontosReferenciasPanel(ttk.Frame):
                 start_expanded=True,
                 button_style="EFM.Panel.TButton",
             )
-            refs.pack(fill="x", padx=8, pady=(0, 4))
+            refs.pack(fill="x", padx=EFM_SHELL_GUTTER, pady=(0, 4))
             inner = refs.body
             for i, m in enumerate(POINT_MARKERS):
                 ttk.Label(inner, text=f"{m.letter}: {m.label_pt}", font=self._ui_font).grid(

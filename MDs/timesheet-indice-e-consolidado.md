@@ -1,16 +1,17 @@
 # EasyFeet - Timesheet (Indice e Consolidado)
 
-Data da consolidacao: 2026-05-28 (encerramento do dia, UTC-3)
-Regra de calculo ativa: pausas > 30 min nao contam (criterio intermediario)
+Data da consolidacao: 2026-05-30 (folha diaria 2026-05-30 incluida, UTC-3)
+Regra de calculo **ativa (novas folhas a partir de 2026-05-30):** pausas **> 20 min** nao contam
+Regra **legado (folhas ate 2026-05-28 inclusive):** pausas **> 30 min** nao contam — **nao recalcular** horas ja registradas
 Fuso horario de referencia: UTC-3
 
 ## 1) Janela consolidada do projeto
 
-- Periodo consolidado: 2026-05-07 10:32 ate 2026-05-28 02:42 (UTC-3) — extremos a partir dos timesheets diarios.
-- Janela total (decorrido, soma dos dias na tabela): 55.78 h
-- Tempo total ativo estimado: 22.83 h
-- Dias com atividade: 5
-- Arquivos diarios consolidados: 4 (+ folha 2026-05-28)
+- Periodo consolidado: 2026-05-07 10:32 ate 2026-05-30 23:30 (UTC-3) — extremos a partir dos timesheets diarios.
+- Janela total (decorrido, soma dos dias na tabela): 68.28 h
+- Tempo total ativo estimado: 30.58 h
+- Dias com atividade: 6
+- Arquivos diarios consolidados: 6
 
 ## 2) Lancamentos tabulares consolidados (base para graficos)
 
@@ -21,6 +22,7 @@ Fuso horario de referencia: UTC-3
 | 2026-05-09 | 10:00  | 20:30 | 30                 | 3.25         | 10.50            | 1       | 2026-05-09-timesheet-horas-trabalhadas.md |
 | 2026-05-25 | 14:00  | 23:45 | 30                 | 5.50         | 9.75             | 1       | 2026-05-25-timesheet-horas-trabalhadas.md |
 | 2026-05-28 | 00:45  | 02:42 | 30                 | 1.75         | 1.95             | 1       | 2026-05-28-timesheet-horas-trabalhadas.md |
+| 2026-05-30 | 11:00  | 23:30 | 20                 | 7.75         | 12.50            | 1       | 2026-05-30-timesheet-horas-trabalhadas.md |
 
 ## 3) Totais acumulados (dia, semana, mes, geral)
 
@@ -33,6 +35,7 @@ Fuso horario de referencia: UTC-3
 | 2026-05-09 | 3.25         | 10.50            |
 | 2026-05-25 | 5.50         | 9.75             |
 | 2026-05-28 | 1.75         | 1.95             |
+| 2026-05-30 | 7.75         | 12.50            |
 
 ### Semanal (ISO week)
 
@@ -40,7 +43,7 @@ Fuso horario de referencia: UTC-3
 |------------|--------------|------------------|
 | 2026-W19   | 12.33        | 33.58            |
 | 2026-W21   | 5.50         | 9.75             |
-| 2026-W22   | 5.00         | 12.45            |
+| 2026-W22   | 12.75        | 24.95            |
 
 Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h ativas ao dia 08 e 4,68 ao dia 07 — semana ISO pode sobrepor dias; usar secao 2 para graficos por data.
 
@@ -48,17 +51,19 @@ Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h
 
 | ano_mes | horas_ativas | horas_decorridas |
 |---------|--------------|------------------|
-| 2026-05 | 22.83        | 55.78            |
+| 2026-05 | 30.58        | 68.28            |
 
 ### Geral
 
-- Total horas ativas no projeto: 22.83
-- Total horas decorridas no periodo consolidado: 55.78
-- Registros diarios acumulados: 5
+- Total horas ativas no projeto: 30.58
+- Total horas decorridas no periodo consolidado: 68.28
+- Registros diarios acumulados: 6
 
 ## 4) Observacoes e protocolo de atualizacao
 
 - Este arquivo deve ser sobrescrito sempre que houver novo timesheet diario.
+- **Criterio de pausa (desde 2026-05-30):** intervalos **> 20 min** sem troca de mensagens **nao** entram nas horas ativas. Folhas antigas mantêm `criterio_pausa_min = 30` na tabela (secao 2); **nao** alterar retroativamente salvo pedido explicito.
+- **Novas folhas diarias:** usar `criterio_pausa_min = 20` na tabela e no cabecalho do `AAAA-MM-DD-timesheet-horas-trabalhadas.md`.
 - Para gerar grafico (dia/semana/mes), use preferencialmente a tabela da secao 2.
 - Os campos da secao 2 foram padronizados para facilitar exportacao para CSV/Excel/Power BI.
 - O arquivo `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` deve ser atualizado junto com este consolidado.
@@ -72,3 +77,4 @@ Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h
 - `2026-05-09-timesheet-horas-trabalhadas.md`
 - `2026-05-25-timesheet-horas-trabalhadas.md`
 - `2026-05-28-timesheet-horas-trabalhadas.md`
+- `2026-05-30-timesheet-horas-trabalhadas.md`

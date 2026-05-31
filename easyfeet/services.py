@@ -5,7 +5,10 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from easyfeet.cliente_dados_corporais import validar_altura_metros, validar_lateralidade, validar_peso_kg
-from easyfeet.models import FichaPodoscopio
+from easyfeet.models import FichaPodoscopio, MomentoClinico
+
+MOMENTO_ROTULO_MAX = 120
+MOMENTO_OBSERVACOES_MAX = 2000
 from easyfeet.repositories import (
     AvaliacaoRepository,
     ClienteRepository,
@@ -213,6 +216,58 @@ class EasyFeetService:
         if ficha_id is not None:
             return self.fichas_podoscopio.atualizar(ficha_id, **payload)
         return self.fichas_podoscopio.criar(cliente_id, **payload)
+
+    def criar_momento_clinico(
+        self,
+        cliente_id: int,
+        rotulo: str,
+        data_referencia: datetime | None = None,
+        observacoes: str = "",
+    ) -> MomentoClinico:
+        if not self.clientes.obter_por_id(cliente_id):
+            raise ValueError("Paciente nao encontrado.")
+        rotulo_txt = (rotulo or "").strip()
+        if not rotulo_txt:
+            raise ValueError("Informe um rotulo para o momento clinico.")
+        when = data_referencia or datetime.now()
+        return self.marcacoes.criar_momento(
+            cliente_id,
+            self._validar_momento_rotulo(rotulo_txt),
+            when,
+            self._validar_momento_observacoes(observacoes),
+        )
+
+    def atualizar_momento_clinico(
+        self,
+        momento_id: int,
+        rotulo: str,
+        observacoes: str = "",
+    ) -> MomentoClinico:
+        momento = self.marcacoes.obter_momento(momento_id)
+        if momento is None:
+            raise ValueError("Momento clinico nao encontrado.")
+        if not self.clientes.obter_por_id(momento.cliente_id):
+            raise ValueError("Paciente nao encontrado.")
+        return self.marcacoes.atualizar_momento(
+            momento_id,
+            self._validar_momento_rotulo((rotulo or "").strip()),
+            self._validar_momento_observacoes(observacoes),
+        )
+
+    @staticmethod
+    def _validar_momento_rotulo(rotulo: str) -> str:
+        if not rotulo:
+            raise ValueError("Informe um rotulo para o momento clinico.")
+        if len(rotulo) > MOMENTO_ROTULO_MAX:
+            raise ValueError(f"Rotulo do momento: maximo {MOMENTO_ROTULO_MAX} caracteres.")
+        return rotulo
+
+    @staticmethod
+    def _validar_momento_observacoes(observacoes: str) -> str:
+        txt = (observacoes or "").strip()
+        if len(txt) > MOMENTO_OBSERVACOES_MAX:
+            raise ValueError(f"Observacoes do momento: maximo {MOMENTO_OBSERVACOES_MAX} caracteres.")
+        return txt
 
     def solicitar_palmilha(
         self,

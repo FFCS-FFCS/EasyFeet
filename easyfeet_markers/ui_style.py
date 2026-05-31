@@ -19,6 +19,11 @@ EFM_UI_FONT_PANEL = ("Segoe UI", EFM_UI_FONT_PANEL_PT)
 EFM_UI_FONT_PANEL_HINT = ("Segoe UI", EFM_UI_FONT_PANEL_HINT_PT)
 EFM_UI_FONT_HINT = ("Segoe UI", EFM_UI_FONT_HINT_PT)
 
+EFM_COLOR_PRIMARY = "#7c1229"
+EFM_COLOR_PRIMARY_HOVER = "#5b0717"
+EFM_COLOR_ACTIONS_BG = "#f7eef1"
+EFM_SHELL_GUTTER = 6
+
 
 def configure_shell_style(root: tk.Misc) -> ttk.Style:
     style = ttk.Style(root)

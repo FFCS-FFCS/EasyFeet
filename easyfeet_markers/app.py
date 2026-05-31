@@ -19,6 +19,10 @@ from easyfeet.models import Cliente, ImagemPlantar, MarcacaoPlantar, MomentoClin
 from easyfeet.paths import DATA_DIR, resolve_project_file, stored_path_for_write
 from easyfeet_markers.registry import KIND_BY_ID, KIND_LABEL_TO_ID, MARKER_KINDS, help_text_for_kind
 from easyfeet_markers.ui_style import (
+    EFM_COLOR_ACTIONS_BG,
+    EFM_COLOR_PRIMARY,
+    EFM_COLOR_PRIMARY_HOVER,
+    EFM_SHELL_GUTTER,
     EFM_UI_FONT,
     EFM_UI_FONT_PANEL_HINT_PT,
     EFM_UI_FONT_PANEL_PT,
@@ -32,6 +36,17 @@ from marcador_plantar.app_tk import PlantarLinhasPanel
 from marcador_pontos.app_tk import PontosReferenciasPanel
 
 NOVO_MOMENTO_LABEL = "[Novo momento de hoje]"
+
+LADO_UI_OPCOES: tuple[tuple[str, str], ...] = (
+    ("Direito (D)", "direito"),
+    ("Esquerdo (E)", "esquerdo"),
+    ("Ambos os pes", "ambos"),
+)
+LADO_LABEL_BY_VALUE = {value: label for label, value in LADO_UI_OPCOES}
+LADO_VALUE_BY_LABEL = {label: value for label, value in LADO_UI_OPCOES}
+LADO_PROMPT_LABEL = "— indique o lado —"
+LADO_COMBO_VALUES = [LADO_PROMPT_LABEL] + [label for label, _ in LADO_UI_OPCOES]
+LADO_VALUES_KNOWN = frozenset(LADO_VALUE_BY_LABEL.values())
 
 
 class EFMMarcadoresApp(tk.Tk):
@@ -56,22 +71,37 @@ class EFMMarcadoresApp(tk.Tk):
         self._current_momento_id: int | None = None
         self._current_imagem_id: int | None = None
         self._current_source_path: Path | None = None
+        self._imagens_by_label: dict[str, ImagemPlantar] = {}
+        self._loading_imagem = False
+        self._loading_lado = False
         self._preselected_cliente_id = preselected_cliente_id
         self._preselected_momento_id = preselected_momento_id
         self._preselected_imagem_id = preselected_imagem_id
         self._preselected_kind_id = preselected_kind_id
+        if preselected_cliente_id is not None and preselected_momento_id is not None:
+            self._context_mode = "hub"
+        elif preselected_cliente_id is not None:
+            self._context_mode = "cliente"
+        else:
+            self._context_mode = "full"
 
         self._var_cliente = tk.StringVar(value="Selecione paciente...")
         self._var_momento = tk.StringVar(value=NOVO_MOMENTO_LABEL)
         self._var_kind = tk.StringVar(value=MARKER_KINDS[0].label_pt)
         self._current_kind_id = MARKER_KINDS[0].id
 
-        header = ttk.Frame(self, padding=(6, 6, 6, 2))
+        header = ttk.Frame(self, padding=(EFM_SHELL_GUTTER, 6, EFM_SHELL_GUTTER, 2))
         header.pack(fill="x")
 
-        ttk.Label(header, text="Paciente:", style="EFM.Shell.TLabel").pack(side="left", padx=(0, 4))
+        self._header_ctx = ttk.Frame(header)
+        self._header_ctx.pack(fill="x")
+        self._header_img = ttk.Frame(header)
+        self._header_img.pack(fill="x", pady=(4, 0))
+
+        self._lbl_paciente = ttk.Label(self._header_ctx, text="Paciente:", style="EFM.Shell.TLabel")
+        self._lbl_paciente.pack(side="left", padx=(0, 4))
         self._combo_cliente = ttk.Combobox(
-            header,
+            self._header_ctx,
             textvariable=self._var_cliente,
             values=[],
             state="readonly",
@@ -82,9 +112,10 @@ class EFMMarcadoresApp(tk.Tk):
         self._combo_cliente.bind("<<ComboboxSelected>>", self._on_cliente_change)
         tune_combobox_font(self._combo_cliente, EFM_UI_FONT_SHELL_PT)
 
-        ttk.Label(header, text="Momento:", style="EFM.Shell.TLabel").pack(side="left", padx=(0, 4))
+        self._lbl_momento = ttk.Label(self._header_ctx, text="Momento:", style="EFM.Shell.TLabel")
+        self._lbl_momento.pack(side="left", padx=(0, 4))
         self._combo_momento = ttk.Combobox(
-            header,
+            self._header_ctx,
             textvariable=self._var_momento,
             values=[NOVO_MOMENTO_LABEL],
             state="readonly",
@@ -95,16 +126,17 @@ class EFMMarcadoresApp(tk.Tk):
         self._combo_momento.bind("<<ComboboxSelected>>", self._on_momento_change)
         tune_combobox_font(self._combo_momento, EFM_UI_FONT_SHELL_PT)
 
-        ttk.Button(
-            header,
+        self._btn_novo_momento = ttk.Button(
+            self._header_ctx,
             text="Novo momento",
             style="EFM.Shell.TButton",
             command=self._create_new_momento_for_selected_cliente,
-        ).pack(side="left", padx=(0, 10))
+        )
+        self._btn_novo_momento.pack(side="left", padx=(0, 10))
 
-        ttk.Label(header, text="Tipo de marcador:", style="EFM.Shell.TLabel").pack(side="left", padx=(0, 4))
+        ttk.Label(self._header_ctx, text="Tipo de marcador:", style="EFM.Shell.TLabel").pack(side="left", padx=(0, 4))
         kind_combo = ttk.Combobox(
-            header,
+            self._header_ctx,
             textvariable=self._var_kind,
             values=[k.label_pt for k in MARKER_KINDS],
             state="readonly",
@@ -115,22 +147,71 @@ class EFMMarcadoresApp(tk.Tk):
         kind_combo.bind("<<ComboboxSelected>>", self._on_kind_change)
         tune_combobox_font(kind_combo, EFM_UI_FONT_SHELL_PT)
 
-        ttk.Button(
-            header,
+        ttk.Button(self._header_ctx, text="Ajuda", style="EFM.Shell.TButton", command=self._show_help_current).pack(
+            side="left"
+        )
+
+        self._btn_carregar_imagem = ttk.Button(
+            self._header_img,
             text="Carregar imagem",
             style="EFM.Shell.TButton",
             command=self._open_image_common,
-        ).pack(side="left", padx=(0, 4))
-        ttk.Button(header, text="Ajuda", style="EFM.Shell.TButton", command=self._show_help_current).pack(side="left")
+        )
+        self._btn_carregar_imagem.pack(side="left", padx=(0, 10))
 
-        actions = ttk.LabelFrame(self, text="Ações", padding=(3, 6, 3, 6))
-        actions.pack(fill="x", padx=6, pady=(2, 4))
-        try:
-            ttk.Style(self).configure("EFM.Shell.TLabelframe.Label", font=("Segoe UI", EFM_UI_FONT_SHELL_PT))
-        except tk.TclError:
-            pass
-        actions_row = ttk.Frame(actions)
-        actions_row.pack(anchor="center")
+        self._lbl_imagem = ttk.Label(self._header_img, text="Imagem:", style="EFM.Shell.TLabel")
+        self._var_imagem = tk.StringVar(value="")
+        self._combo_imagem = ttk.Combobox(
+            self._header_img,
+            textvariable=self._var_imagem,
+            values=[],
+            state="disabled",
+            width=24,
+            style="EFM.Shell.TCombobox",
+        )
+        self._combo_imagem.bind("<<ComboboxSelected>>", self._on_imagem_change)
+        tune_combobox_font(self._combo_imagem, EFM_UI_FONT_SHELL_PT)
+
+        self._lbl_lado = ttk.Label(self._header_img, text="Lado:", style="EFM.Shell.TLabel")
+        self._var_lado = tk.StringVar(value="")
+        self._combo_lado = ttk.Combobox(
+            self._header_img,
+            textvariable=self._var_lado,
+            values=LADO_COMBO_VALUES,
+            state="disabled",
+            width=18,
+            style="EFM.Shell.TCombobox",
+        )
+        self._combo_lado.bind("<<ComboboxSelected>>", self._on_lado_change)
+        tune_combobox_font(self._combo_lado, EFM_UI_FONT_SHELL_PT)
+
+        self._btn_excluir_imagem = ttk.Button(
+            self._header_img,
+            text="Excluir imagem",
+            style="EFM.Shell.TButton",
+            command=self._delete_current_imagem,
+        )
+
+        self._context_bar = ttk.Frame(self, padding=(EFM_SHELL_GUTTER, 4, EFM_SHELL_GUTTER, 2))
+        self._context_label = ttk.Label(
+            self._context_bar,
+            text="",
+            style="EFM.Shell.TLabel",
+            wraplength=900,
+        )
+        self._context_label.pack(side="left", fill="x", expand=True)
+
+        self._actions_frame = tk.Frame(self, bg=EFM_COLOR_ACTIONS_BG, pady=8)
+        self._actions_frame.pack(fill="x", pady=(2, 4))
+        tk.Label(
+            self._actions_frame,
+            text="Ações",
+            bg=EFM_COLOR_ACTIONS_BG,
+            fg=EFM_COLOR_PRIMARY,
+            font=("Segoe UI", EFM_UI_FONT_SHELL_PT, "bold"),
+        ).pack(anchor="w", padx=EFM_SHELL_GUTTER, pady=(0, 6))
+        actions_row = tk.Frame(self._actions_frame, bg=EFM_COLOR_ACTIONS_BG)
+        actions_row.pack(fill="x", anchor="w", padx=EFM_SHELL_GUTTER)
 
         self._btn_export = ttk.Button(
             actions_row,
@@ -170,14 +251,22 @@ class EFMMarcadoresApp(tk.Tk):
             style="EFM.Shell.TButton",
             command=self._action_clear_all,
         )
-        self._btn_clear_all.pack(side="left")
-        self._btn_save_patient = ttk.Button(
+        self._btn_clear_all.pack(side="left", padx=(0, 4))
+        self._btn_save_patient = tk.Button(
             actions_row,
             text="Salvar no paciente",
-            style="EFM.Shell.TButton",
+            font=("Segoe UI", EFM_UI_FONT_SHELL_PT),
+            bg=EFM_COLOR_PRIMARY,
+            fg="#ffffff",
+            activebackground=EFM_COLOR_PRIMARY_HOVER,
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=12,
+            pady=3,
+            cursor="hand2",
             command=self._action_save_to_patient,
         )
-        self._btn_save_patient.pack(side="left", padx=(8, 0))
+        self._btn_save_patient.pack(side="left", padx=(4, 0))
 
         self._container = ttk.Frame(self)
         self._container.pack(fill="both", expand=True)
@@ -204,6 +293,7 @@ class EFMMarcadoresApp(tk.Tk):
         self._panel_plantar.pack(fill="both", expand=True)
         self._load_clientes()
         self._apply_open_context()
+        self._apply_context_mode_ui()
         self._refresh_action_bar()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -247,6 +337,257 @@ class EFMMarcadoresApp(tk.Tk):
     def _selected_cliente(self) -> Cliente | None:
         return self._clientes_by_label.get(self._var_cliente.get())
 
+    def _selected_momento(self) -> MomentoClinico | None:
+        return self._momentos_by_label.get(self._var_momento.get())
+
+    @staticmethod
+    def _format_lado_label(lado: str) -> str:
+        labels = {
+            "direito": "Direito (D)",
+            "esquerdo": "Esquerdo (E)",
+            "ambos": "Ambos os pes",
+            "nao_informado": "Nao informado",
+        }
+        return labels.get(lado, lado.replace("_", " ").title())
+
+    def _context_summary_text(self) -> str:
+        cliente = self._selected_cliente()
+        if cliente is None:
+            return "Plantigrafo — Analise"
+        stamp = ""
+        if self._context_mode == "hub":
+            mom = self._selected_momento()
+            if mom is not None:
+                rotulo = (mom.rotulo or "").strip() or "Momento"
+                stamp = f" · {mom.data_referencia.strftime('%d/%m/%Y %H:%M')} — {rotulo}"
+        elif self._current_momento_id is not None:
+            mom = self._selected_momento()
+            if mom is not None:
+                rotulo = (mom.rotulo or "").strip() or "Momento"
+                stamp = f" · {mom.data_referencia.strftime('%d/%m/%Y %H:%M')} — {rotulo}"
+        img_note = ""
+        if self._current_imagem_id is not None:
+            img = self._session.get(ImagemPlantar, self._current_imagem_id)
+            if img is not None:
+                img_note = f" · Imagem #{img.id} ({self._format_lado_label(img.lado)})"
+        return f"Plantigrafo — Analise · {cliente.nome}{stamp}{img_note}"
+
+    def _apply_context_mode_ui(self) -> None:
+        if self._context_mode == "hub":
+            for w in (self._lbl_paciente, self._combo_cliente, self._lbl_momento, self._combo_momento, self._btn_novo_momento):
+                w.pack_forget()
+            self._context_bar.pack(fill="x", before=self._actions_frame)
+            self._context_label.configure(text=self._context_summary_text())
+        elif self._context_mode == "cliente":
+            self._lbl_paciente.pack_forget()
+            self._combo_cliente.pack_forget()
+            self._context_bar.pack(fill="x", before=self._actions_frame)
+            self._context_label.configure(text=self._context_summary_text())
+        else:
+            self._context_bar.pack_forget()
+
+    def _refresh_context_banner(self) -> None:
+        if self._context_mode in ("hub", "cliente"):
+            self._context_label.configure(text=self._context_summary_text())
+
+    def _sync_lado_combo(self) -> None:
+        if self._current_imagem_id is None:
+            self._lbl_lado.pack_forget()
+            self._combo_lado.pack_forget()
+            self._combo_lado.configure(state="disabled")
+            self._var_lado.set("")
+            self._sync_imagem_actions()
+            return
+        img = self._session.get(ImagemPlantar, self._current_imagem_id)
+        if img is None:
+            self._lbl_lado.pack_forget()
+            self._combo_lado.pack_forget()
+            self._combo_lado.configure(state="disabled")
+            self._var_lado.set("")
+            self._sync_imagem_actions()
+            return
+        lado = (img.lado or "nao_informado").strip()
+        if lado in LADO_VALUES_KNOWN:
+            label = LADO_LABEL_BY_VALUE[lado]
+        else:
+            label = LADO_PROMPT_LABEL
+        self._loading_lado = True
+        self._var_lado.set(label)
+        self._loading_lado = False
+        self._lbl_lado.pack(side="left", padx=(8, 4))
+        self._combo_lado.configure(state="readonly")
+        self._combo_lado.pack(side="left", padx=(0, 8))
+        self._sync_imagem_actions()
+
+    def _sync_imagem_actions(self) -> None:
+        if self._current_imagem_id is None:
+            self._btn_excluir_imagem.pack_forget()
+        else:
+            self._btn_excluir_imagem.pack(side="left", padx=(0, 4))
+
+    def _delete_current_imagem(self) -> None:
+        if self._current_imagem_id is None:
+            messagebox.showinfo("Marcadores", "Nenhuma imagem aberta para excluir.", parent=self)
+            return
+        img_id = self._current_imagem_id
+        img = self._session.get(ImagemPlantar, img_id)
+        if img is None:
+            return
+        rotulo = self._imagem_combo_label(img)
+        if not messagebox.askyesno(
+            "Excluir imagem",
+            f"Remover {rotulo}?\n\n"
+            "Apaga a foto e todas as marcacoes (linhas e pontos) desta imagem.\n"
+            "Esta acao nao pode ser desfeita.",
+            parent=self,
+        ):
+            return
+        cliente = self._selected_cliente()
+        momento_id = self._current_momento_id
+        for marc in self._session.scalars(
+            select(MarcacaoPlantar).where(MarcacaoPlantar.imagem_id == img_id)
+        ):
+            self._session.delete(marc)
+        if cliente is not None and momento_id is not None:
+            pasta = DATA_DIR / "pacientes" / str(cliente.id) / "momentos" / str(momento_id) / "imagens" / str(img_id)
+            if pasta.is_dir():
+                try:
+                    shutil.rmtree(pasta)
+                except OSError:
+                    pass
+        self._session.delete(img)
+        self._session.commit()
+        self._current_imagem_id = None
+        self._current_source_path = None
+        self._load_latest_or_requested_image_for_current_momento()
+        messagebox.showinfo("Marcadores", "Imagem excluida.", parent=self)
+
+    def _on_lado_change(self, _event: object | None = None) -> None:
+        if self._loading_lado:
+            return
+        if self._current_imagem_id is None:
+            return
+        img = self._session.get(ImagemPlantar, self._current_imagem_id)
+        if img is None:
+            return
+        label = self._var_lado.get().strip()
+        novo_lado = LADO_VALUE_BY_LABEL.get(label)
+        if not novo_lado or novo_lado == img.lado:
+            return
+        img.lado = novo_lado
+        self._session.commit()
+        self._refresh_imagens_combo(select_id=img.id)
+        self._refresh_context_banner()
+
+    def _imagem_combo_label(self, img: ImagemPlantar) -> str:
+        return f"#{img.id} — {self._format_lado_label(img.lado)}"
+
+    def _refresh_imagens_combo(self, *, select_id: int | None = None) -> None:
+        momento_id = self._current_momento_id
+        self._imagens_by_label.clear()
+        labels: list[str] = []
+        if momento_id is not None:
+            imagens = self._query(
+                select(ImagemPlantar)
+                .where(ImagemPlantar.momento_id == momento_id)
+                .order_by(ImagemPlantar.id.asc())
+            )
+            for img in imagens:
+                if not isinstance(img, ImagemPlantar):
+                    continue
+                label = self._imagem_combo_label(img)
+                self._imagens_by_label[label] = img
+                labels.append(label)
+        if not labels:
+            self._lbl_imagem.pack_forget()
+            self._combo_imagem.pack_forget()
+            self._combo_imagem.configure(values=[], state="disabled")
+            self._var_imagem.set("")
+            return
+        self._combo_imagem.configure(values=labels, state="readonly")
+        pick_id = select_id if select_id is not None else self._current_imagem_id
+        selected_label = labels[-1]
+        if pick_id is not None:
+            for label, img in self._imagens_by_label.items():
+                if img.id == pick_id:
+                    selected_label = label
+                    break
+        self._loading_imagem = True
+        self._var_imagem.set(selected_label)
+        self._loading_imagem = False
+        self._lbl_imagem.pack(side="left", padx=(0, 4))
+        self._combo_imagem.pack(side="left", padx=(0, 10))
+
+    def _on_imagem_change(self, _event: object | None = None) -> None:
+        if self._loading_imagem:
+            return
+        img = self._imagens_by_label.get(self._var_imagem.get())
+        if img is None:
+            return
+        if img.id == self._current_imagem_id:
+            return
+        self._load_imagem_by_id(img.id)
+
+    def _load_imagem_by_id(self, imagem_id: int) -> None:
+        img = self._session.get(ImagemPlantar, imagem_id)
+        if img is None:
+            return
+        if self._current_momento_id is not None and img.momento_id != self._current_momento_id:
+            return
+        resolved = resolve_project_file(img.path_original)
+        if resolved is None:
+            messagebox.showwarning(
+                "Marcadores",
+                f"Imagem #{imagem_id} nao encontrada no disco.",
+                parent=self,
+            )
+            return
+        self._current_imagem_id = img.id
+        self._current_source_path = resolved
+        for panel in (self._panel_plantar, self._panel_pontos):
+            panel.load_image(resolved)
+        self._try_load_existing_marcacao(self._current_kind_id)
+        self._sync_lado_combo()
+        self._refresh_imagens_combo(select_id=img.id)
+        self._refresh_context_banner()
+
+    def _ask_lado_imagem(self, *, default: str = "direito") -> str | None:
+        dlg = tk.Toplevel(self)
+        dlg.title("Lado da imagem")
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.resizable(False, False)
+        frm = ttk.Frame(dlg, padding=12)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="Qual pe aparece nesta foto?").pack(anchor="w", pady=(0, 8))
+        var = tk.StringVar(value=default if default in LADO_VALUE_BY_LABEL.values() else "direito")
+        for label, value in LADO_UI_OPCOES:
+            ttk.Radiobutton(frm, text=label, variable=var, value=value).pack(anchor="w", pady=2)
+        result: list[str | None] = [None]
+
+        def ok() -> None:
+            result[0] = var.get()
+            dlg.destroy()
+
+        def cancel() -> None:
+            dlg.destroy()
+
+        row = ttk.Frame(frm)
+        row.pack(fill="x", pady=(14, 0))
+        ttk.Button(row, text="Continuar", command=ok).pack(side="right")
+        ttk.Button(row, text="Cancelar", command=cancel).pack(side="right", padx=(0, 8))
+        dlg.protocol("WM_DELETE_WINDOW", cancel)
+        dlg.bind("<Return>", lambda _e: ok())
+        dlg.bind("<Escape>", lambda _e: cancel())
+        dlg.update_idletasks()
+        req_w = max(300, int(dlg.winfo_reqwidth()))
+        req_h = max(220, int(dlg.winfo_reqheight())) + 16
+        px = max(0, self.winfo_x() + (self.winfo_width() - req_w) // 2)
+        py = max(0, self.winfo_y() + (self.winfo_height() - req_h) // 2)
+        dlg.geometry(f"{req_w}x{req_h}+{px}+{py}")
+        self.wait_window(dlg)
+        return result[0]
+
     def _refresh_momentos_combo(self) -> None:
         cliente = self._selected_cliente()
         self._momentos_by_label.clear()
@@ -275,12 +616,14 @@ class EFMMarcadoresApp(tk.Tk):
         if self._var_momento.get() not in labels:
             self._var_momento.set(NOVO_MOMENTO_LABEL)
         self._on_momento_change()
+        self._refresh_context_banner()
 
     def _clear_workspace_image(self) -> None:
         for panel in (self._panel_plantar, self._panel_pontos):
             clear_fn = getattr(panel, "clear_image", None)
             if callable(clear_fn):
                 clear_fn()
+        self._sync_lado_combo()
 
     def _on_cliente_change(self, _event: object | None = None) -> None:
         self._current_momento_id = None
@@ -302,32 +645,22 @@ class EFMMarcadoresApp(tk.Tk):
     def _load_latest_or_requested_image_for_current_momento(self) -> None:
         momento_id = self._current_momento_id
         if momento_id is None:
+            self._refresh_imagens_combo()
             self._clear_workspace_image()
             return
-        img: ImagemPlantar | None = None
+        pick_id: int | None = None
         if self._preselected_imagem_id is not None:
             maybe = self._session.get(ImagemPlantar, self._preselected_imagem_id)
             if maybe is not None and maybe.momento_id == momento_id:
-                img = maybe
+                pick_id = maybe.id
             self._preselected_imagem_id = None
-        if img is None:
-            img = self._session.scalar(
-                select(ImagemPlantar)
-                .where(ImagemPlantar.momento_id == momento_id)
-                .order_by(ImagemPlantar.id.desc())
-            )
-        if img is None:
+        self._refresh_imagens_combo(select_id=pick_id)
+        if not self._imagens_by_label:
             self._clear_workspace_image()
             return
-        resolved = resolve_project_file(img.path_original)
-        if resolved is None:
-            self._clear_workspace_image()
-            return
-        self._current_imagem_id = img.id
-        self._current_source_path = resolved
-        for panel in (self._panel_plantar, self._panel_pontos):
-            panel.load_image(resolved)
-        self._try_load_existing_marcacao(self._current_kind_id)
+        if pick_id is None:
+            pick_id = int(list(self._imagens_by_label.values())[-1].id)
+        self._load_imagem_by_id(pick_id)
 
     def _apply_open_context(self) -> None:
         kind_id = (self._preselected_kind_id or "").strip()
@@ -428,6 +761,9 @@ class EFMMarcadoresApp(tk.Tk):
         )
         if not path:
             return
+        lado = self._ask_lado_imagem()
+        if lado is None:
+            return
         try:
             p = Path(path).resolve()
             width = 0
@@ -440,7 +776,7 @@ class EFMMarcadoresApp(tk.Tk):
 
             imagem = ImagemPlantar(
                 momento_id=momento_id,
-                lado="nao_informado",
+                lado=lado,
                 nome_arquivo=p.name,
                 path_original="",
                 largura=width,
@@ -460,6 +796,10 @@ class EFMMarcadoresApp(tk.Tk):
             self._current_imagem_id = imagem.id
             self._current_source_path = dest_original
             load_im(dest_original)
+            self._try_load_existing_marcacao(self._current_kind_id)
+            self._refresh_imagens_combo(select_id=imagem.id)
+            self._sync_lado_combo()
+            self._refresh_context_banner()
         except OSError:
             messagebox.showerror("Marcadores", "Nao foi possivel abrir a imagem.")
 

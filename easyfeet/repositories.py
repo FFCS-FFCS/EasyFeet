@@ -184,6 +184,38 @@ class MarcacaoPlantarRepository:
         )
         return list(self.session.scalars(stmt))
 
+    def criar_momento(
+        self,
+        cliente_id: int,
+        rotulo: str,
+        data_referencia: datetime,
+        observacoes: str = "",
+    ) -> MomentoClinico:
+        momento = MomentoClinico(
+            cliente_id=cliente_id,
+            data_referencia=data_referencia,
+            rotulo=rotulo,
+            observacoes=observacoes,
+        )
+        self.session.add(momento)
+        self.session.commit()
+        self.session.refresh(momento)
+        return momento
+
+    def obter_momento(self, momento_id: int) -> MomentoClinico | None:
+        return self.session.get(MomentoClinico, momento_id)
+
+    def atualizar_momento(self, momento_id: int, rotulo: str, observacoes: str = "") -> MomentoClinico:
+        momento = self.session.get(MomentoClinico, momento_id)
+        if momento is None:
+            raise ValueError("Momento clinico nao encontrado.")
+        momento.rotulo = rotulo
+        momento.observacoes = observacoes
+        momento.atualizado_em = datetime.utcnow()
+        self.session.commit()
+        self.session.refresh(momento)
+        return momento
+
     def listar_imagens_por_momento(self, momento_id: int) -> list[ImagemPlantar]:
         stmt = (
             select(ImagemPlantar)

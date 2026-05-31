@@ -1,0 +1,196 @@
+{
+  "version": "2.0.0",
+  "app": {
+    "name": "EasyFeet",
+    "defaultRoute": "/dashboard"
+  },
+  "roles": ["admin", "fisioterapeuta", "recepcao"],
+  "menu": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "icon": "layout-dashboard",
+      "route": "/dashboard",
+      "order": 10,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+    },
+    {
+      "id": "pacientes",
+      "label": "Pacientes",
+      "icon": "users",
+      "route": "/pacientes",
+      "order": 20,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "crud": {
+        "resource": "pacientes",
+        "actions": ["list", "create", "detail", "edit", "archive"]
+      }
+    },
+    {
+      "id": "paciente_hub",
+      "label": "Ficha clínica",
+      "route": "/pacientes/{id}",
+      "order": 21,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "hiddenInSidebar": true
+    },
+    {
+      "id": "laudos_consolidado",
+      "label": "Laudos",
+      "icon": "file-text",
+      "route": "/laudos",
+      "order": 40,
+      "visibleFor": ["admin", "fisioterapeuta"]
+    },
+    {
+      "id": "plantigrafo",
+      "label": "Plantígrafo",
+      "icon": "scan-foot",
+      "route": "/plantigrafo",
+      "order": 50,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "licenseModule": "plantigrafo",
+      "children": [
+        {
+          "id": "efm_marcadores",
+          "label": "Análise",
+          "route": "/plantigrafo/analise",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+        },
+        {
+          "id": "plantigrafo_laudos",
+          "label": "Laudos",
+          "route": "/plantigrafo/laudos",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "plantigrafo_config",
+          "label": "Configurações",
+          "route": "/plantigrafo/configuracoes",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    },
+    {
+      "id": "podoscopio",
+      "label": "Podoscópio",
+      "icon": "microscope",
+      "route": "/podoscopio",
+      "order": 60,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "licenseModule": "podoscopio",
+      "children": [
+        {
+          "id": "podoscopio_ficha_tecnica",
+          "label": "Ficha / Avaliação",
+          "route": "/podoscopio/ficha",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+        },
+        {
+          "id": "podoscopio_laudos",
+          "label": "Laudos",
+          "route": "/podoscopio/laudos",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "podoscopio_config",
+          "label": "Configurações",
+          "route": "/podoscopio/configuracoes",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    },
+    {
+      "id": "avaliacao_postural",
+      "label": "Avaliação postural",
+      "icon": "person-standing",
+      "route": "/avaliacao-postural",
+      "order": 70,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "licenseModule": "avaliacao_postural",
+      "children": [
+        {
+          "id": "postural_avaliacao",
+          "label": "Avaliação",
+          "route": "/avaliacao-postural/avaliacao",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "postural_laudos",
+          "label": "Laudos",
+          "route": "/avaliacao-postural/laudos",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "postural_config",
+          "label": "Configurações",
+          "route": "/avaliacao-postural/configuracoes",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    },
+    {
+      "id": "palmilhas",
+      "label": "Palmilhas",
+      "icon": "footprints",
+      "route": "/palmilhas",
+      "order": 75,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+    },
+    {
+      "id": "relatorios",
+      "label": "Relatórios",
+      "icon": "bar-chart",
+      "route": "/relatorios",
+      "order": 100,
+      "visibleFor": ["admin", "fisioterapeuta"]
+    },
+    {
+      "id": "configuracoes",
+      "label": "Configurações",
+      "icon": "settings",
+      "route": "/configuracoes",
+      "order": 110,
+      "visibleFor": ["admin", "fisioterapeuta"],
+      "children": [
+        {
+          "id": "config_clinica",
+          "label": "Clínica",
+          "route": "/configuracoes/clinica",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "config_usuarios",
+          "label": "Utilizadores",
+          "route": "/configuracoes/usuarios",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "config_licencas",
+          "label": "Licenças",
+          "route": "/configuracoes/licencas",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "config_templates_pdf",
+          "label": "Templates PDF",
+          "route": "/configuracoes/templates-pdf",
+          "order": 40,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # EasyFeet - Gerenciador de MDs (Indice e Guia)
 
-Ultima atualizacao: 2026-05-30 UTC-3 (retomada: execucao roteiro Fase 2 marcadores)
+Ultima atualizacao: 2026-05-30 UTC-3 (M2–M4 Hub/EFM concluidos; retomada M5)
 
 ## Objetivo deste arquivo
 
@@ -35,13 +35,15 @@ A versao anterior do gerenciador **nao** e a fonte da lista de documentos nem do
 
 ## Inventario desta regeneracao (arquivos .md)
 
-Encontrados **19** arquivos `*.md` alem do presente gerenciador (varredura recursiva em `MDs`):
+Encontrados **22** arquivos `*.md` alem do presente gerenciador (varredura recursiva em `MDs`):
 
 | Arquivo |
 |----------|
 | `cadastro-pacientes-prototipo-e-testes.md` |
 | `especificacao-marcacoes-vinculo-paciente.md` |
 | `roteiro-testes-marcadores-fase2.md` |
+| `rascunho-menu-hub-paciente-v2.md` |
+| `versionamento-local-easyfeet.md` |
 | `caminho-do-projeto.md` |
 | `2026-05-07-visao-geral-e-registro-evolutivo.md` |
 | `2026-05-07-status-tecnico-e-pendencias.md` |
@@ -54,6 +56,7 @@ Encontrados **19** arquivos `*.md` alem do presente gerenciador (varredura recur
 | `2026-05-09-timesheet-horas-trabalhadas.md` |
 | `2026-05-25-timesheet-horas-trabalhadas.md` |
 | `2026-05-28-timesheet-horas-trabalhadas.md` |
+| `2026-05-30-timesheet-horas-trabalhadas.md` |
 | `timesheet-indice-e-consolidado.md` |
 | `MD_MESTRE-indice-e-governanca.md` |
 | `OLD/2026-05-08-gerenciador-de-mds-indice-e-guia.md` |
@@ -76,7 +79,11 @@ Qualquer assistente ou script deve tratar a pasta OneDrive como **única** raiz 
 
 **Sessao 2026-05-28 (resumo):** refinamento completo da ficha tecnica do Podoscopio (`gui.py` + `podoscopio_pdf.py`): correcoes de UX/formulario, carga de ficha salva, exportacao PDF branco/preenchido, logo/rodape com pagina, quebra de pagina, campo paciente (branco/preenchido) e alinhamento com cadastro do paciente.
 
-**Sessao 2026-05-30 (retomada):** proximo passo ativo = **executar manualmente** `roteiro-testes-marcadores-fase2.md` via `EF.bat` (secoes A–G). Validacao automatica de imports/tabelas reexecutada antes dos testes manuais.
+**Sessao 2026-05-30 (continuacao):** roteiro Fase 2 marcadores **concluido** (A–G); **M1** menu v2 implementado (`menu-config-v2.json`, app **v2.0.0**); rascunho CRM/Hub validado (`rascunho-menu-hub-paciente-v2.md`); versionamento local Git + snapshots (`versionamento-local-easyfeet.md`, tag `v1.0.0`); criterio timesheet **20 min** para novos apontamentos (legado 30 min preservado).
+
+**Sessao 2026-05-30 (tarde/noite):** **M2** Hub v0 (ficha clinica, Resumo + Linha do tempo); **M3** timeline agrupada por dia, edicao de momentos, historico migrou do modulo Pacientes; **M4** EFM B+ (contexto Hub, lado D/E, seletor/exclusao de imagens, Plantigrafo Hub-first); UX Pacientes («Novo paciente», colunas tabela) e EFM (2 linhas header, faixa Acoes, zoom 50 em 50, alinhamento); `scripts/test_hub_smoke.py`.
+
+**Proximo passo ativo:** **M5** — modal «Momentos» na ficha (busca/filtros); atalho Podoscopio com contexto (placeholder hoje).
 
 ### Pen drive / instalador (quando build for feito de novo)
 
@@ -95,30 +102,37 @@ Um EXE/ZIP gerado em `C:\Cursor_Projetos\EasyFeet` (ex.: sessão 2026-05-25) **n
 | EFM | Regra, sugestão AD/pontos; **integrado** em `easyfeet_markers/app.py` (barra Ações centralizada, painéis compactos, rodapé recolhível nos painéis) |
 | App principal `EF.bat` | Cadastro com altura, peso, IMC (?), lateralidade; modal IMC; tabela pacientes com scroll H/V |
 | Dashboard | Total de pacientes; últimos 3 cadastros; `easyfeet/dashboard_ui.py`; `EF_teste_dashboard.bat` |
-| Menu / versão | Grupo **Módulos** (Marcadores, Avaliação Postural); **v1.0.0** no rodapé da sidebar (`easyfeet/version.py`) |
+| Menu / versão | **Menu v2** (`menu-config-v2.json`): Plantigrafo, Podoscopio, Laudos, Palmilhas…; **v2.0.0** no rodapé (`easyfeet/version.py`); v1.0.0 congelada (tag Git + snapshot) |
+| Versionamento | Git local, `MarcarVersao.bat`, `CriarSnapshot.bat`, guia `versionamento-local-easyfeet.md` |
 | UX cabeçalho | Buscar e Filtro **apenas** no módulo Pacientes |
 | Dados | `easyfeet/paths.py`, `cliente_dados_corporais.py`, migração `criado_em`; `EF.bat` com `%~dp0` |
 | Release | Build OneDrive (`dist_new` / `release/` em 2026-05-25); teste diário preferir **`EF.bat`**, não instalador |
 | Protótipos teste | `EF_teste_cadastro.bat`, `EF_teste_modulo.bat`, `EF_teste_dashboard.bat` |
-| Especificação (sem código) | `especificacao-marcacoes-vinculo-paciente.md`  vínculo paciente, momentos clínicos, licença de módulo |
+| Especificação | `especificacao-marcacoes-vinculo-paciente.md` — vínculo paciente, momentos clínicos, licença de módulo |
 | Marcadores Fase 2 (código) | Selector paciente/momento no EFM; Salvar no paciente; histórico em Pacientes; reabertura contextual CLI |
-| Validação Fase 2 (em execucao) | `roteiro-testes-marcadores-fase2.md`  checklist manual A–G; automáticos OK (2026-05-28 e revalidacao 2026-05-30) |
+| Hub paciente (M2–M3) | Ficha clinica (`paciente_hub`): Resumo, Linha do tempo agrupada por dia, edicao momento, bloco Plantigrafo por imagem; botao «Abrir ficha clinica»; historico marcacoes **saiu** de Pacientes |
+| EFM M4 (B+) | Contexto Hub (`cliente_id` + `momento_id`); Plantigrafo → Analise Hub-first; lado D/E/Ambos; combo Imagem + Excluir imagem; header 2 linhas; faixa Acoes; zoom 100–400% |
+| UX Pacientes | Botao «Novo paciente»; colunas Lateralidade/Email alargadas |
+| Testes Hub | `scripts/test_hub_smoke.py` |
+| UX v2 (doc) | `rascunho-menu-hub-paciente-v2.md` — CRM, Hub, B+; **M1–M4 codigo OK**, M5 pendente |
+| Validação Fase 2 | `roteiro-testes-marcadores-fase2.md` — **concluido** manualmente (A–G, 2026-05-30) |
 | Podoscopio / PDFs | Ficha tecnica: UX, persistencia, PDF branco/preenchido, logo, paginacao, campo paciente (2026-05-28) |
 
 ### Ponto de retomada  próximo trabalho sugerido (produto)
 
-Ordem prática para **continuar de onde paramos** (2026-05-30):
+Ordem prática para **continuar de onde paramos** (2026-05-30, fim do dia):
 
-1. **Agora:** executar `roteiro-testes-marcadores-fase2.md` com `EF.bat` (~45–60 min), secao A primeiro (fluxo core), depois B–G.
-2. Marcar OK/Falhou no roteiro; reportar falhas ao assistente para correcao imediata.
-3. Corrigir bloqueadores antes de avancar para release ou novas features.
+1. **Agora (M5):** modal «Momentos» na ficha clinica — busca e filtros por data/tipo; ver `rascunho-menu-hub-paciente-v2.md`.
+2. Atalho **Podoscopio** na ficha (hoje stub) — mesmo padrao CRM do Plantigrafo.
 3. **Pendência futura registada:** PEND-MARC-001 comparar imagens entre momentos (palmilhas).
 4. **Documentar delta** em `2026-05-07-status-tecnico-e-pendencias.md` / arquitetura (opcional).
-5. **Release:** só se pedido explicitamente  `build_instalador.bat` na raiz OneDrive; fechar ficheiros em `dist/` antes do build.
+5. **Release:** só se pedido explicitamente — `build_instalador.bat` na raiz OneDrive; fechar ficheiros em `dist/` antes do build.
 
 ### Timesheet
 
-Ultimo consolidado: `timesheet-indice-e-consolidado.md` / `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv`  inclui **`2026-05-28-timesheet-horas-trabalhadas.md`**. Totais gerais: **22,83 h** ativas / **55,78 h** decorridas.
+Ultimo consolidado: `timesheet-indice-e-consolidado.md` / `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` — inclui **`2026-05-30-timesheet-horas-trabalhadas.md`**. Totais gerais: **30,58 h** ativas / **68,28 h** decorridas.
+
+**Regra activa (novas folhas a partir de 2026-05-30):** pausas **> 20 min** não contam. Folhas até 2026-05-28 mantêm critério **30 min** (legado; não recalcular). Novas folhas diárias: `criterio_pausa_min = 20`.
 
 ### Inventário documental
 
@@ -144,7 +158,9 @@ Fluxo esperado nesta revisao:
 9. Roadmap de fases e marcos (`2026-05-08-roadmap-fases-e-marcos.md`)
 10. Cadastro  protótipo e testes (`cadastro-pacientes-prototipo-e-testes.md`)
 11. **Marcacoes vinculadas ao paciente  especificacao** (`especificacao-marcacoes-vinculo-paciente.md`)
-12. **Roteiro de testes Fase 2 (marcadores)** (`roteiro-testes-marcadores-fase2.md`)  apos implementacao; validacao manual pendente
+12. **Roteiro de testes Fase 2 (marcadores)** (`roteiro-testes-marcadores-fase2.md`) — concluido 2026-05-30
+13. **Menu v2 / Hub paciente (rascunho CRM)** (`rascunho-menu-hub-paciente-v2.md`) — M1–M4 implementados; M5 em seguida
+14. **Versionamento local** (`versionamento-local-easyfeet.md`) — tags, snapshots, scripts `.bat`
 
 Opcional (nao faz parte do fluxo minimo do produto): snapshots e copias (`OLD/`, arquivos com nome "Copia") para auditoria ou comparacao.
 
@@ -179,8 +195,20 @@ Opcional (nao faz parte do fluxo minimo do produto): snapshots e copias (`OLD/`,
 ### `roteiro-testes-marcadores-fase2.md`
 
 **Finalidade:** checklist manual (tabelas OK/Falhou) para validar Fase 2 dos marcadores; inclui o que ja foi testado automaticamente e quando executar.  
-**Quando ler:** quando for testar no desktop; pedir ao assistente *«Quero executar o roteiro de testes da Fase 2 dos marcadores»*.  
+**Quando ler:** auditoria ou regressao; Fase 2 **concluida** em 2026-05-30.  
 **Perguntas que responde:** O que conferir passo a passo? O que ja passou em smoke/DB? Onde ficam os ficheiros gravados?
+
+### `rascunho-menu-hub-paciente-v2.md`
+
+**Finalidade:** spec validada do menu v2, Hub paciente-centrado, laudos consolidados, palmilhas transversal, roteiro M1–M4.  
+**Quando ler:** antes de implementar M2 (Hub), M3 (timeline) ou M4 (EFM B+).  
+**Perguntas que responde:** Como fica a navegacao v2? O que entra no Hub? Qual ordem de implementacao?
+
+### `versionamento-local-easyfeet.md`
+
+**Finalidade:** Git local, tags, snapshots ZIP, scripts `MarcarVersao.bat` / `CriarSnapshot.bat` / `ListarVersoes.bat`.  
+**Quando ler:** ao marcar versao, criar snapshot ou retomar baseline congelada (ex.: v1.0.0).  
+**Perguntas que responde:** Como versionar sem release? Onde ficam os snapshots?
 
 ### `caminho-do-projeto.md`
 
@@ -321,12 +349,25 @@ Exemplo:
 - Baseline documental: **pendente**
 - **Adicionado (2026-05-25):** card Total de pacientes; removido card contagem recentes; lista fixa dos 3 últimos cadastros por `criado_em`.
 
-## Tema: marcacoes vinculadas ao paciente (especificacao)
+## Tema: marcacoes vinculadas ao paciente (especificacao + Fase 2)
 
-- Arquivos: `especificacao-marcacoes-vinculo-paciente.md`; referencia em `2026-05-08-roadmap-fases-e-marcos.md` (Fase 2)
-- Baseline: `especificacao-marcacoes-vinculo-paciente.md` v1.0 (2026-05-26 no doc / sessao 25-26)
-- Estado codigo: **nao implementado**  apenas especificacao e alinhamento de produto (EasyFeet unico, licenca de modulo, selector paciente no EFM, momentos, Salvar manual).
+- Arquivos: `especificacao-marcacoes-vinculo-paciente.md`; `roteiro-testes-marcadores-fase2.md`
+- Baseline: `especificacao-marcacoes-vinculo-paciente.md` v1.0 (2026-05-26)
+- Estado codigo: **implementado (Fase 2)** — selector paciente/momento, Salvar, historico, reabertura CLI; roteiro manual **concluido** 2026-05-30.
 - Pendencias: PEND-MARC-001 (comparar evolucao entre momentos), etc.  ver especificacao §10.
+
+## Tema: menu v2 e Hub paciente (CRM)
+
+- Arquivos: `rascunho-menu-hub-paciente-v2.md`; codigo `menu-config-v2.json`, `easyfeet/gui.py`, `easyfeet/navigation.py`
+- Baseline doc: `rascunho-menu-hub-paciente-v2.md`
+- Estado: **M1–M4 concluidos** (menu v2, Hub, timeline, EFM B+); **M5 pendente** (modal Momentos + filtros).
+- Observacao: EFM abre com contexto da ficha; Plantigrafo → Analise sem paciente mostra ecran Hub-first; Podoscopio atalho na ficha ainda stub.
+
+## Tema: versionamento local
+
+- Arquivos: `versionamento-local-easyfeet.md`; scripts `MarcarVersao.bat`, `CriarSnapshot.bat`, `ListarVersoes.bat`
+- Baseline: `versionamento-local-easyfeet.md`
+- Estado: Git local activo; tag `v1.0.0`; snapshot em `snapshots/`.
 
 ## Tema: cadastro de pacientes  idade minima e modal de orientacao (legado deste bloco)
 
@@ -335,9 +376,9 @@ Exemplo:
 
 ## Tema: marcadores e regras (EFM)
 
-- Estado: **implementado** (regras CRUD + EFM UI integrada 2026-05-25).
-- Referencias: `easyfeet_markers/app.py`, `marcador_plantar/`, `marcador_pontos/`, `marker_rules_store.py`, `menu-config-v1.json` (grupo `modulos`).
-- **Alterado:** barra Ações centralizada; `show_action_toolbar=False` nos painéis; fontes compactas; persistencia por paciente **pendente** (ver especificacao).
+- Estado: **implementado** (regras CRUD + EFM UI integrada; Fase 2 vinculo paciente 2026-05-25/30).
+- Referencias: `easyfeet_markers/app.py`, `marcador_plantar/`, `marcador_pontos/`, `marker_rules_store.py`, `menu-config-v2.json` (Plantigrafo → Analise / Config).
+- **Alterado (2026-05-30):** menu v2; persistencia por paciente **implementada** (Fase 2); **M4** EFM B+ (contexto Hub, lado D/E, seletor/exclusao imagem, UX header 2 linhas + faixa Acoes).
 - MD tematico de regras: ainda **pendente**; especificacao de vinculo paciente em arquivo proprio.
 
 ## Tema: gerenciador de MDs  copia local (nao canonica)
@@ -432,8 +473,8 @@ Exemplo:
   - `2026-05-28-timesheet-horas-trabalhadas.md`
 - Baseline: `2026-05-08-timesheet-horas-trabalhadas.md`
 - Ultima versao: `2026-05-28-timesheet-horas-trabalhadas.md`
-- Mudancas desde baseline: folhas 09, 25 e 28; consolidado atualizado 2026-05-28.
-- Observacao: atualizacao incremental no mesmo dia pode sobrescrever a folha desse dia; ao virar data, novo `AAAA-MM-DD-timesheet-horas-trabalhadas.md`.
+- Mudancas desde baseline: folhas 09, 25 e 28; consolidado atualizado 2026-05-28; **criterio de pausa 20 min** para novas folhas a partir de 2026-05-30 (legado 30 min preservado).
+- Observacao: atualizacao incremental no mesmo dia pode sobrescrever a folha desse dia; ao virar data, novo `AAAA-MM-DD-timesheet-horas-trabalhadas.md` com `criterio_pausa_min = 20`.
 
 ## Tema: timesheet consolidado (indice e totais)
 
@@ -441,8 +482,8 @@ Exemplo:
   - `timesheet-indice-e-consolidado.md`
 - Baseline: `timesheet-indice-e-consolidado.md`
 - Ultima versao: `timesheet-indice-e-consolidado.md`
-- Mudancas desde baseline: nao aplicavel (arquivo consolidado vivo, sobrescrito a cada atualizacao)
-- Observacao: deve manter sincronia com `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv`.
+- Mudancas desde baseline: regra de pausa **20 min** activa desde 2026-05-30; legado 30 min nas linhas ate 2026-05-28.
+- Observacao: deve manter sincronia com `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv`. Novas folhas: `criterio_pausa_min = 20`.
 
 ## Protocolo de atualizacao deste gerenciador (quando voce pedir)
 
@@ -478,7 +519,7 @@ Procedimento:
 8. Reavaliar a **Ordem recomendada para entendimento completo** (inserir, promover ou rebaixar itens quando um MD novo mudar prioridade de leitura).
 9. Aplicar os **criterios de consistencia documental** (secao abaixo).
 10. Sobrescrever **este** arquivo com o estado atualizado.
-11. **Timesheet (consolidado + CSV):** se existirem `*-timesheet-horas-trabalhadas.md` **e** o pedido for de **timesheet/horas** ou de **encerramento combinado** (ver lista acima), atualizar `timesheet-indice-e-consolidado.md` e `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` com totais diarios, semanais, mensais e total acumulado (CSV Brasil: separador `;` e decimal `,`). Se o pedido for **apenas** regeneracao do indice do gerenciador (sem mencionar horas/timesheet/encerrar o dia), **nao** alterar timesheet/CSV salvo o usuario pedir o contrario na mesma mensagem.
+11. **Timesheet (consolidado + CSV):** se existirem `*-timesheet-horas-trabalhadas.md` **e** o pedido for de **timesheet/horas** ou de **encerramento combinado** (ver lista acima), atualizar `timesheet-indice-e-consolidado.md` e `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` com totais diarios, semanais, mensais e total acumulado (CSV Brasil: separador `;` e decimal `,`). **Novas folhas (desde 2026-05-30):** `criterio_pausa_min = 20` (pausas > 20 min nao contam); folhas ate 2026-05-28 mantem 30 min — **nao recalcular** legado salvo pedido explicito. Se o pedido for **apenas** regeneracao do indice do gerenciador (sem mencionar horas/timesheet/encerrar o dia), **nao** alterar timesheet/CSV salvo o usuario pedir o contrario na mesma mensagem.
 
 ## Criterios de consistencia documental
 
