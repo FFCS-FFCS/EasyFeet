@@ -1,17 +1,17 @@
 # EasyFeet - Timesheet (Indice e Consolidado)
 
-Data da consolidacao: 2026-05-30 (folha diaria 2026-05-30 incluida, UTC-3)
+Data da consolidacao: 2026-06-12 (folha diaria 2026-06-12 atualizada — 2 sessoes, UTC-3)
 Regra de calculo **ativa (novas folhas a partir de 2026-05-30):** pausas **> 20 min** nao contam
 Regra **legado (folhas ate 2026-05-28 inclusive):** pausas **> 30 min** nao contam — **nao recalcular** horas ja registradas
 Fuso horario de referencia: UTC-3
 
 ## 1) Janela consolidada do projeto
 
-- Periodo consolidado: 2026-05-07 10:32 ate 2026-05-30 23:30 (UTC-3) — extremos a partir dos timesheets diarios.
-- Janela total (decorrido, soma dos dias na tabela): 68.28 h
-- Tempo total ativo estimado: 30.58 h
-- Dias com atividade: 6
-- Arquivos diarios consolidados: 6
+- Periodo consolidado: 2026-05-07 10:32 ate 2026-06-12 14:00 (UTC-3) — extremos a partir dos timesheets diarios.
+- Janela total (decorrido, soma dos dias na tabela): 88.11 h
+- Tempo total ativo estimado: 43.33 h
+- Dias com atividade: 8
+- Arquivos diarios consolidados: 8
 
 ## 2) Lancamentos tabulares consolidados (base para graficos)
 
@@ -23,6 +23,8 @@ Fuso horario de referencia: UTC-3
 | 2026-05-25 | 14:00  | 23:45 | 30                 | 5.50         | 9.75             | 1       | 2026-05-25-timesheet-horas-trabalhadas.md |
 | 2026-05-28 | 00:45  | 02:42 | 30                 | 1.75         | 1.95             | 1       | 2026-05-28-timesheet-horas-trabalhadas.md |
 | 2026-05-30 | 11:00  | 23:30 | 20                 | 7.75         | 12.50            | 1       | 2026-05-30-timesheet-horas-trabalhadas.md |
+| 2026-06-01 | 10:00  | 23:30 | 20                 | 7.00         | 13.50            | 1       | 2026-06-01-timesheet-horas-trabalhadas.md |
+| 2026-06-12 | 06:30  | 14:00 | 20                 | 5.75         | 6.33             | 2       | 2026-06-12-timesheet-horas-trabalhadas.md |
 
 ## 3) Totais acumulados (dia, semana, mes, geral)
 
@@ -36,6 +38,8 @@ Fuso horario de referencia: UTC-3
 | 2026-05-25 | 5.50         | 9.75             |
 | 2026-05-28 | 1.75         | 1.95             |
 | 2026-05-30 | 7.75         | 12.50            |
+| 2026-06-01 | 7.00         | 13.50            |
+| 2026-06-12 | 5.75         | 6.33             |
 
 ### Semanal (ISO week)
 
@@ -43,7 +47,9 @@ Fuso horario de referencia: UTC-3
 |------------|--------------|------------------|
 | 2026-W19   | 12.33        | 33.58            |
 | 2026-W21   | 5.50         | 9.75             |
-| 2026-W22   | 12.75        | 24.95            |
+| 2026-W22   | 9.50         | 14.45            |
+| 2026-W23   | 7.00         | 13.50            |
+| 2026-W24   | 5.75         | 6.33             |
 
 Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h ativas ao dia 08 e 4,68 ao dia 07 — semana ISO pode sobrepor dias; usar secao 2 para graficos por data.
 
@@ -52,12 +58,13 @@ Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h
 | ano_mes | horas_ativas | horas_decorridas |
 |---------|--------------|------------------|
 | 2026-05 | 30.58        | 68.28            |
+| 2026-06 | 12.75        | 19.83            |
 
 ### Geral
 
-- Total horas ativas no projeto: 30.58
-- Total horas decorridas no periodo consolidado: 68.28
-- Registros diarios acumulados: 6
+- Total horas ativas no projeto: 43.33
+- Total horas decorridas no periodo consolidado: 88.11
+- Registros diarios acumulados: 8
 
 ## 4) Observacoes e protocolo de atualizacao
 
@@ -78,3 +85,5 @@ Nota: 2026-05-08 cruza meia-noite; a folha `2026-05-08-timesheet` atribui 7,65 h
 - `2026-05-25-timesheet-horas-trabalhadas.md`
 - `2026-05-28-timesheet-horas-trabalhadas.md`
 - `2026-05-30-timesheet-horas-trabalhadas.md`
+- `2026-06-01-timesheet-horas-trabalhadas.md`
+- `2026-06-12-timesheet-horas-trabalhadas.md`

@@ -68,6 +68,23 @@ def collect_nav_module_ids_for_role(config: dict[str, Any], role: str) -> set[st
     return ids
 
 
+def collect_nav_accordion_group_ids_for_role(config: dict[str, Any], role: str) -> set[str]:
+    """IDs de grupos sanfona (itens com filhos visiveis) — estado inicial fechado na sidebar."""
+
+    def walk(item: dict[str, Any]) -> None:
+        children = get_visible_child_menu_items(item, role)
+        if not children:
+            return
+        ids.add(str(item["id"]))
+        for ch in children:
+            walk(ch)
+
+    ids: set[str] = set()
+    for item in get_visible_menu_for_role(config, role):
+        walk(item)
+    return ids
+
+
 def find_menu_item_path(config: dict[str, Any], module_id: str) -> list[dict[str, Any]]:
     """Caminho do item no menu: [raiz, ..., item] ou lista vazia se não existir."""
     target = str(module_id)

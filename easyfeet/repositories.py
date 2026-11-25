@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from easyfeet.models import (
     Avaliacao,
     Cliente,
+    FichaNavicular,
     FichaPodoscopio,
     ImagemPlantar,
     Laudo,
+    LaudoNavicular,
     MarcacaoPlantar,
     MomentoClinico,
     PalmilhaPedido,
@@ -313,3 +315,174 @@ class FichaPodoscopioRepository:
             .order_by(FichaPodoscopio.data_avaliacao.desc(), FichaPodoscopio.id.desc())
         )
         return list(self.session.scalars(stmt))
+
+    def excluir(self, ficha_id: int) -> None:
+        ficha = self.session.get(FichaPodoscopio, ficha_id)
+        if not ficha:
+            raise ValueError("Ficha podoscopica nao encontrada.")
+        self.session.delete(ficha)
+        self.session.commit()
+
+
+class FichaNavicularRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def criar(
+        self,
+        cliente_id: int,
+        data_avaliacao: datetime,
+        rotulo_atendimento: str,
+        queixa_objetivo: str,
+        altura_sentado_d_mm: float | None,
+        altura_pe_d_mm: float | None,
+        queda_d_mm: float | None,
+        classificacao_d: str,
+        altura_sentado_e_mm: float | None,
+        altura_pe_e_mm: float | None,
+        queda_e_mm: float | None,
+        classificacao_e: str,
+        observacoes: str,
+    ) -> FichaNavicular:
+        ficha = FichaNavicular(
+            cliente_id=cliente_id,
+            data_avaliacao=data_avaliacao,
+            rotulo_atendimento=rotulo_atendimento,
+            queixa_objetivo=queixa_objetivo,
+            altura_sentado_d_mm=altura_sentado_d_mm,
+            altura_pe_d_mm=altura_pe_d_mm,
+            queda_d_mm=queda_d_mm,
+            classificacao_d=classificacao_d,
+            altura_sentado_e_mm=altura_sentado_e_mm,
+            altura_pe_e_mm=altura_pe_e_mm,
+            queda_e_mm=queda_e_mm,
+            classificacao_e=classificacao_e,
+            observacoes=observacoes,
+        )
+        self.session.add(ficha)
+        self.session.commit()
+        self.session.refresh(ficha)
+        return ficha
+
+    def atualizar(
+        self,
+        ficha_id: int,
+        data_avaliacao: datetime,
+        rotulo_atendimento: str,
+        queixa_objetivo: str,
+        altura_sentado_d_mm: float | None,
+        altura_pe_d_mm: float | None,
+        queda_d_mm: float | None,
+        classificacao_d: str,
+        altura_sentado_e_mm: float | None,
+        altura_pe_e_mm: float | None,
+        queda_e_mm: float | None,
+        classificacao_e: str,
+        observacoes: str,
+    ) -> FichaNavicular:
+        ficha = self.session.get(FichaNavicular, ficha_id)
+        if not ficha:
+            raise ValueError("Ficha navicular nao encontrada.")
+        ficha.data_avaliacao = data_avaliacao
+        ficha.rotulo_atendimento = rotulo_atendimento
+        ficha.queixa_objetivo = queixa_objetivo
+        ficha.altura_sentado_d_mm = altura_sentado_d_mm
+        ficha.altura_pe_d_mm = altura_pe_d_mm
+        ficha.queda_d_mm = queda_d_mm
+        ficha.classificacao_d = classificacao_d
+        ficha.altura_sentado_e_mm = altura_sentado_e_mm
+        ficha.altura_pe_e_mm = altura_pe_e_mm
+        ficha.queda_e_mm = queda_e_mm
+        ficha.classificacao_e = classificacao_e
+        ficha.observacoes = observacoes
+        ficha.atualizado_em = datetime.utcnow()
+        self.session.commit()
+        self.session.refresh(ficha)
+        return ficha
+
+    def obter_por_id(self, ficha_id: int) -> FichaNavicular | None:
+        return self.session.get(FichaNavicular, ficha_id)
+
+    def listar_por_cliente(self, cliente_id: int) -> list[FichaNavicular]:
+        stmt = (
+            select(FichaNavicular)
+            .where(FichaNavicular.cliente_id == cliente_id)
+            .order_by(FichaNavicular.data_avaliacao.desc(), FichaNavicular.id.desc())
+        )
+        return list(self.session.scalars(stmt))
+
+    def excluir(self, ficha_id: int) -> None:
+        ficha = self.session.get(FichaNavicular, ficha_id)
+        if not ficha:
+            raise ValueError("Ficha navicular nao encontrada.")
+        self.session.delete(ficha)
+        self.session.commit()
+
+
+class LaudoNavicularRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def criar(
+        self,
+        cliente_id: int,
+        ficha_navicular_id: int,
+        profissional_nome: str,
+        interpretacao: str,
+        conclusao: str,
+        recomendacoes: str,
+    ) -> LaudoNavicular:
+        laudo = LaudoNavicular(
+            cliente_id=cliente_id,
+            ficha_navicular_id=ficha_navicular_id,
+            profissional_nome=profissional_nome,
+            interpretacao=interpretacao,
+            conclusao=conclusao,
+            recomendacoes=recomendacoes,
+        )
+        self.session.add(laudo)
+        self.session.commit()
+        self.session.refresh(laudo)
+        return laudo
+
+    def atualizar(
+        self,
+        laudo_id: int,
+        profissional_nome: str,
+        interpretacao: str,
+        conclusao: str,
+        recomendacoes: str,
+    ) -> LaudoNavicular:
+        laudo = self.session.get(LaudoNavicular, laudo_id)
+        if not laudo:
+            raise ValueError("Laudo navicular nao encontrado.")
+        laudo.profissional_nome = profissional_nome
+        laudo.interpretacao = interpretacao
+        laudo.conclusao = conclusao
+        laudo.recomendacoes = recomendacoes
+        laudo.atualizado_em = datetime.utcnow()
+        self.session.commit()
+        self.session.refresh(laudo)
+        return laudo
+
+    def obter_por_id(self, laudo_id: int) -> LaudoNavicular | None:
+        return self.session.get(LaudoNavicular, laudo_id)
+
+    def obter_por_ficha(self, ficha_navicular_id: int) -> LaudoNavicular | None:
+        stmt = select(LaudoNavicular).where(LaudoNavicular.ficha_navicular_id == ficha_navicular_id)
+        return self.session.scalar(stmt)
+
+    def listar_por_cliente(self, cliente_id: int) -> list[LaudoNavicular]:
+        stmt = (
+            select(LaudoNavicular)
+            .where(LaudoNavicular.cliente_id == cliente_id)
+            .order_by(LaudoNavicular.criado_em.desc(), LaudoNavicular.id.desc())
+        )
+        return list(self.session.scalars(stmt))
+
+    def excluir(self, laudo_id: int) -> None:
+        laudo = self.session.get(LaudoNavicular, laudo_id)
+        if not laudo:
+            raise ValueError("Laudo navicular nao encontrado.")
+        self.session.delete(laudo)
+        self.session.commit()

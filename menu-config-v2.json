@@ -139,6 +139,38 @@
       ]
     },
     {
+      "id": "navicular",
+      "label": "Teste Navicular",
+      "icon": "ruler",
+      "route": "/navicular",
+      "order": 72,
+      "visibleFor": ["admin", "fisioterapeuta", "recepcao"],
+      "licenseModule": "navicular",
+      "children": [
+        {
+          "id": "navicular_ficha_tecnica",
+          "label": "Ficha / Avaliação",
+          "route": "/navicular/ficha",
+          "order": 10,
+          "visibleFor": ["admin", "fisioterapeuta", "recepcao"]
+        },
+        {
+          "id": "navicular_laudos",
+          "label": "Laudos",
+          "route": "/navicular/laudos",
+          "order": 20,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        },
+        {
+          "id": "navicular_config",
+          "label": "Configurações",
+          "route": "/navicular/configuracoes",
+          "order": 30,
+          "visibleFor": ["admin", "fisioterapeuta"]
+        }
+      ]
+    },
+    {
       "id": "palmilhas",
       "label": "Palmilhas",
       "icon": "footprints",

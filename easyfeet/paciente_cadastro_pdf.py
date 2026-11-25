@@ -117,14 +117,14 @@ def _build_doc(destino: Path, titulo: str) -> tuple[SimpleDocTemplate, dict[str,
 
 
 def export_ficha_cadastro_paciente_pdf_branco(destino: Path) -> None:
-    """PDF para preenchimento manual (caneta) com todos os campos do cadastro."""
+    """PDF para preenchimento manual com todos os campos do cadastro."""
     doc, st, font_name = _build_doc(destino, "Cadastro paciente — em branco")
     story: list = []
 
     story.extend(cabecalho_pdf(st, "EasyFeet — Ficha de cadastro de paciente"))
     story.append(
         Paragraph(
-            "Versao para preenchimento manual (caneta). Depois, digite os dados no sistema em Pacientes.",
+            "Versao para preenchimento manual. Depois, digite os dados no sistema em Pacientes.",
             st["subtitle"],
         )
     )

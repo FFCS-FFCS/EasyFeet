@@ -238,6 +238,7 @@ Ordem pode ser ajustada; fases 1–2 entregam valor mínimo utilizável.
 | **PEND-MARC-004** | Vincular `momento_clinico.avaliacao_id` quando o CRUD de Avaliações estiver ativo. | Média |
 | **PEND-MARC-005** | Migração pontual de ficheiros legados em `Imagens/Pacientes/{nome}/` para `data/pacientes/{id}/`. | Baixa |
 | **PEND-MARC-006** | Duplicar momento ou marcação ("Salvar como nova versão") — só se surgir necessidade além de "novo momento". | Baixa |
+| **PEND-NAV-001** | **Teste do Navicular** — ficha de medição (sentado + em pé); **Modo A:** até 10 mm = normal (Brody); Modos B/C futuros. Doc: `Documentos de Apoio/EF - Navicular mm x percentual.md`. | **Alta (prioridade utilizador)** |
 
 Estas pendências devem ser refletidas em `2026-05-08-roadmap-fases-e-marcos.md` (Fase 2+) quando o produto retomar desenvolvimento.
 

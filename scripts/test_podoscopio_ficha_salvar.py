@@ -48,7 +48,11 @@ def main() -> int:
     if lista[0].queixa_objetivo != "Dor nas costas":
         print("FALHOU: dados nao persistidos")
         return 1
-    print(f"OK: ficha #{ficha.id} salva e listada para cliente #{c.id} ({len(lista)} ficha(s))")
+    service.excluir_ficha_podoscopio(ficha.id, cliente_id=c.id)
+    if service.fichas_podoscopio.obter_por_id(ficha.id) is not None:
+        print("FALHOU: ficha nao removida apos excluir")
+        return 1
+    print(f"OK: ficha #{ficha.id} salva, listada e excluida para cliente #{c.id}")
     return 0
 
 

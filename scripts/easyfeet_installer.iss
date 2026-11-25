@@ -1,9 +1,14 @@
-#define MyAppName "EasyFeet"
+#ifndef MyAppName
+  #define MyAppName "EasyFeet"
+#endif
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"
 #endif
 #ifndef DistBundle
   #define DistBundle "..\dist\EasyFeet"
+#endif
+#ifndef OutputBaseFilename
+  #define OutputBaseFilename "EasyFeet-Setup-{#MyAppVersion}"
 #endif
 #define MyAppPublisher "EasyFeet"
 #define MyAppExeName "EasyFeet.exe"
@@ -17,7 +22,7 @@ DefaultDirName={autopf}\EasyFeet
 DefaultGroupName=EasyFeet
 DisableProgramGroupPage=yes
 OutputDir=..\release
-OutputBaseFilename=EasyFeet-Setup-{#MyAppVersion}
+OutputBaseFilename={#OutputBaseFilename}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

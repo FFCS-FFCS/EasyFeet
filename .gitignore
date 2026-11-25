@@ -21,6 +21,7 @@ snapshots/*.zip
 
 # Pacotes / binarios grandes
 EasyFeet_Com_Dados.zip
+EasyFeet_DEMO_Com_Dados.zip
 *.exe
 
 # Atalhos e lixo do Windows

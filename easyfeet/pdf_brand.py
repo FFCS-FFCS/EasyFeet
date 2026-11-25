@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Callable
 
@@ -16,6 +17,7 @@ from reportlab.platypus import Paragraph, Table, TableStyle
 from easyfeet.paths import PROJECT_ROOT
 
 _FONT_REGISTERED = False
+PDF_MARGEM_HORIZONTAL = 1.8 * cm
 LOGO_CANDIDATES = (
     "easyfeet_symbol_256.png",
     "easyfeet_symbol_128.png",
@@ -50,6 +52,42 @@ def resolve_logo() -> Path | None:
         if path.is_file():
             return path
     return None
+
+
+def largura_util_tabela_pdf() -> float:
+    """Largura disponivel para tabelas de rotulo/valor (A4 com margens padrao EasyFeet)."""
+    return A4[0] - 2 * PDF_MARGEM_HORIZONTAL
+
+
+def col_widths_rotulo_valor(
+    font_name: str,
+    rotulos: Sequence[str],
+    *,
+    font_size: int = 9,
+    largura_util: float | None = None,
+    pad_celula: float = 0.42 * cm,
+    largura_min_valor: float = 5.0 * cm,
+) -> tuple[float, float]:
+    """
+    Coluna de rotulo com largura minima para o texto; restante para valor/preenchimento.
+    Rotulos com ' — ' contam como duas linhas (largura da linha mais longa).
+    """
+    if largura_util is None:
+        largura_util = largura_util_tabela_pdf()
+
+    max_w = 0.0
+    for rotulo in rotulos:
+        for linha in rotulo.replace(" — ", "\n").split("\n"):
+            texto = linha.strip()
+            if texto:
+                max_w = max(max_w, pdfmetrics.stringWidth(texto, font_name, font_size))
+
+    rotulo_w = max_w + pad_celula
+    valor_w = largura_util - rotulo_w
+    if valor_w < largura_min_valor:
+        valor_w = largura_min_valor
+        rotulo_w = largura_util - valor_w
+    return rotulo_w, valor_w
 
 
 def cabecalho_pdf(st: dict, titulo: str) -> list:

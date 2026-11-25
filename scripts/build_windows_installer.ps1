@@ -1,6 +1,11 @@
+param(
+  [switch]$Demo
+)
+
 $ErrorActionPreference = "Stop"
 
-Write-Host "== EasyFeet build (Windows) ==" -ForegroundColor Cyan
+$buildLabel = if ($Demo) { "EasyFeet build DEMO (com dados atuais)" } else { "EasyFeet build (Windows)" }
+Write-Host "== $buildLabel ==" -ForegroundColor Cyan
 
 $root = Split-Path -Parent $PSScriptRoot
 $FORBIDDEN_ROOT = "C:\Cursor_Projetos\EasyFeet"
@@ -120,13 +125,41 @@ if (-not $iscc) {
   throw "Inno Setup (iscc) não encontrado no PATH nem nas pastas padrão."
 }
 
-$distBundleRel = if ($distDir -like "*dist_new*") { "..\dist_new\EasyFeet" } else { "..\dist\EasyFeet" }
-& $iscc.Source "/DMyAppVersion=1.0.0" "/DDistBundle=$distBundleRel" "scripts\easyfeet_installer.iss"
+$appVersion = "2.0.0"
+$versionPy = Join-Path $root "easyfeet\version.py"
+if (Test-Path $versionPy) {
+  $verMatch = Select-String -Path $versionPy -Pattern 'APP_VERSION\s*=\s*"([^"]+)"' | Select-Object -First 1
+  if ($verMatch) { $appVersion = $verMatch.Matches[0].Groups[1].Value }
+}
 
-$zipPath = Join-Path $root "EasyFeet_Com_Dados.zip"
+$distBundleRel = if ($distDir -like "*dist_new*") { "..\dist_new\EasyFeet" } else { "..\dist\EasyFeet" }
+$issArgs = @(
+  "/DMyAppVersion=$appVersion",
+  "/DDistBundle=$distBundleRel",
+  "scripts\easyfeet_installer.iss"
+)
+if ($Demo) {
+  $demoOutput = "EasyFeet-Setup-DEMO-$appVersion"
+  $issArgs = @(
+    "/DMyAppVersion=$appVersion",
+    '/DMyAppName=EasyFeet (DEMO)',
+    "/DOutputBaseFilename=$demoOutput",
+    "/DDistBundle=$distBundleRel",
+    "scripts\easyfeet_installer.iss"
+  )
+  Write-Host "   Modo DEMO: instalador $demoOutput.exe (inclui data/ atual)" -ForegroundColor DarkGray
+}
+& $iscc.Source @issArgs
+
+$zipName = if ($Demo) { "EasyFeet_DEMO_Com_Dados.zip" } else { "EasyFeet_Com_Dados.zip" }
+$zipPath = Join-Path $root $zipName
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-Write-Host "5) Criando ZIP portatil (EasyFeet_Com_Dados.zip)..." -ForegroundColor Yellow
-Compress-Archive -Path $bundleDir -DestinationPath $zipPath -Force
+Write-Host "5) Criando ZIP portatil ($zipName)..." -ForegroundColor Yellow
+try {
+  Compress-Archive -Path $bundleDir -DestinationPath $zipPath -Force
+} catch {
+  Write-Host "AVISO: ZIP nao criado (ficheiros em uso). Instalador .exe ja esta em release\." -ForegroundColor Yellow
+}
 
 Write-Host "Build concluído." -ForegroundColor Green
 Write-Host "Pasta dist: $bundleDir"

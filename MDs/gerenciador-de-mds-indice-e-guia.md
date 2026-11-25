@@ -1,6 +1,6 @@
 # EasyFeet - Gerenciador de MDs (Indice e Guia)
 
-Ultima atualizacao: 2026-05-30 UTC-3 (M2–M4 Hub/EFM concluidos; retomada M5)
+Ultima atualizacao: 2026-06-12 UTC-3 (encerramento do dia: timesheet + gerenciador; NAV-4 + instalador DEMO)
 
 ## Objetivo deste arquivo
 
@@ -35,7 +35,7 @@ A versao anterior do gerenciador **nao** e a fonte da lista de documentos nem do
 
 ## Inventario desta regeneracao (arquivos .md)
 
-Encontrados **22** arquivos `*.md` alem do presente gerenciador (varredura recursiva em `MDs`):
+Encontrados **25** arquivos `*.md` alem do presente gerenciador (varredura recursiva em `MDs`):
 
 | Arquivo |
 |----------|
@@ -57,6 +57,9 @@ Encontrados **22** arquivos `*.md` alem do presente gerenciador (varredura recur
 | `2026-05-25-timesheet-horas-trabalhadas.md` |
 | `2026-05-28-timesheet-horas-trabalhadas.md` |
 | `2026-05-30-timesheet-horas-trabalhadas.md` |
+| `2026-06-01-timesheet-horas-trabalhadas.md` |
+| `2026-06-12-timesheet-horas-trabalhadas.md` |
+| `lista-de-proximos-passos.md` |
 | `timesheet-indice-e-consolidado.md` |
 | `MD_MESTRE-indice-e-governanca.md` |
 | `OLD/2026-05-08-gerenciador-de-mds-indice-e-guia.md` |
@@ -75,7 +78,11 @@ Qualquer assistente ou script deve tratar a pasta OneDrive como **única** raiz 
 
 **Workspace oficial (definitivo):** `C:\Users\flavi\OneDrive\Documentos\Ideias_Projetos\Cursor_Projetos\EasyFeet`  ver `caminho-do-projeto.md`. A pasta `C:\Cursor_Projetos\EasyFeet` está **descontinuada**.
 
-**Pedido que motivou esta regeneracao:** *"atualizar o gerenciador de MDs e depois vamos continuar de onde paramos."*
+**Pedido que motivou esta regeneracao:** *"Encerrar o dia: atualizar timesheet e o gerenciador de MDs. Depois vamos continuar de onde paramos."*
+
+**Commit de referencia (codigo M2–M4):** `e28c34d` — `feat(v2): Hub M2-M4, EFM B+ e encerramento 2026-05-30` (branch `master`). Codigo Navicular (NAV-0/NAV-1) **apos** este commit — ainda sem tag dedicada.
+
+**Estado do repositorio:** M2–M4 no commit acima; Navicular implementado localmente (NAV-1); ficheiros locais nao versionados (ex.: `Imagens/Pacientes/`, `Documentos de Apoio/`, PDFs de teste) — nao entram no Git.
 
 **Sessao 2026-05-28 (resumo):** refinamento completo da ficha tecnica do Podoscopio (`gui.py` + `podoscopio_pdf.py`): correcoes de UX/formulario, carga de ficha salva, exportacao PDF branco/preenchido, logo/rodape com pagina, quebra de pagina, campo paciente (branco/preenchido) e alinhamento com cadastro do paciente.
 
@@ -83,23 +90,49 @@ Qualquer assistente ou script deve tratar a pasta OneDrive como **única** raiz 
 
 **Sessao 2026-05-30 (tarde/noite):** **M2** Hub v0 (ficha clinica, Resumo + Linha do tempo); **M3** timeline agrupada por dia, edicao de momentos, historico migrou do modulo Pacientes; **M4** EFM B+ (contexto Hub, lado D/E, seletor/exclusao de imagens, Plantigrafo Hub-first); UX Pacientes («Novo paciente», colunas tabela) e EFM (2 linhas header, faixa Acoes, zoom 50 em 50, alinhamento); `scripts/test_hub_smoke.py`.
 
-**Proximo passo ativo:** **M5** — modal «Momentos» na ficha (busca/filtros); atalho Podoscopio com contexto (placeholder hoje).
+**Sessao 2026-06-01 (Teste Navicular):** **NAV-0** menu + hub; **NAV-1** ficha funcional + BD + Modo A (Brody, **10 mm**); PDF limiares regenerado; UX ficha (mm multiplos digitos, layout); sanfonas fechadas no arranque; excluir ficha (Navicular + Podoscopio); combo «Ficha salva» corrigido; textos laudo registados (**PEND-NAV-LAUDO-001**); testes `test_navicular_ficha_salvar.py`, `test_ficha_salva_combo_smoke.py`. Docs em `Documentos de Apoio/EF - Navicular *.md` (fora de `MDs/`).
 
-### Pen drive / instalador (quando build for feito de novo)
+**Sessao 2026-06-12 (manha):** **NAV-2** PDF Navicular (`navicular_pdf.py`, botoes, `test_navicular_pdf.py`); refinamento PDFs Navicular + Podoscopio (sem tracos/canetas em branco, destaque Alterado, fotos so preenchida); `pdf_brand.col_widths_rotulo_valor` (largura minima rotulos nos 4 PDFs).
+
+**Sessao 2026-06-12 (tarde):** **NAV-4** + **PEND-NAV-LAUDO-001** — ecrã `navicular_laudos`, BD `laudos_navicular`, `navicular_laudo.py`, `navicular_laudo_pdf.py`, smoke `test_navicular_laudo.py`. **Instalador DEMO** com `data/` atual: `release/EasyFeet-Setup-DEMO-2.0.0.exe`, `EasyFeet_DEMO_Com_Dados.zip` (`build_instalador_demo.bat`).
+
+**Proximo passo ativo:** ver **`lista-de-proximos-passos.md`** — **NAV-3** (fotos/Hub); M5 Hub **pausado**.
+
+### Retomada imediata (Navicular — o que implementar)
+
+| Item | Detalhe | Ficheiros provaveis |
+|------|---------|---------------------|
+| **NAV-3** | Fotos sentado/em pe + Hub/timeline | `gui.py`, `data/pacientes/{id}/navicular/` |
+| Teste | Smoke laudos + PDF ficha | `scripts/test_navicular_laudo.py`, `test_navicular_pdf.py` |
+
+**Spec:** `Documentos de Apoio/EF - Navicular plano de implantacao.md`; checklist em **`lista-de-proximos-passos.md`**.
+
+### Retomada pausada (M5 Hub)
+
+| Item | Detalhe | Ficheiros provaveis |
+|------|---------|---------------------|
+| Botao **Momentos** | Modal lista filtravel na ficha clinica | `easyfeet/gui.py` |
+| Busca / filtros | Texto, datas, «com Plantigrafo / sem exames» | `gui.py`, eventualmente `services.py` |
+| Atalho Podoscopio | Substituir stub `_hub_atalho_modulo` | `gui.py` |
+
+**Spec:** `rascunho-menu-hub-paciente-v2.md` §6.2; **`lista-de-proximos-passos.md`** (M5-1…M5-5).
+
+### Pen drive / instalador (entrega DEMO — 2026-06-12)
 
 Só copiar ficheiros gerados **na raiz OneDrive**:
 
-- **Instalar noutro PC:** `release\EasyFeet-Setup-1.0.0.exe`
-- **Portátil (sem instalar):** `EasyFeet_Com_Dados.zip` (ou pasta `dist\EasyFeet\`)
+- **Instalar noutro PC (com dados atuais):** `release\EasyFeet-Setup-DEMO-2.0.0.exe` — nome **EasyFeet (DEMO)** no assistente; inclui `data\` (BD, pacientes, regras).
+- **Portátil (sem instalar):** `EasyFeet_DEMO_Com_Dados.zip` (ou pasta `dist\EasyFeet\`)
+- **Regenerar:** `build_instalador_demo.bat` (feche EasyFeet antes)
 
-Um EXE/ZIP gerado em `C:\Cursor_Projetos\EasyFeet` (ex.: sessão 2026-05-25) **não** conta como entrega oficial  pode ignorar; o próximo build deve correr só na pasta OneDrive.
+Build legado `EasyFeet-Setup-1.0.0.exe` / `EasyFeet_Com_Dados.zip` — substituido pelo DEMO v2.0.0 para demonstracao. EXE/ZIP em `C:\Cursor_Projetos\EasyFeet` **nao** conta como entrega oficial.
 
 ### O que já está feito (código + operação)
 
 | Área | Entregue |
 |------|----------|
 | Regras CRUD | `protocolo.itens`, migração JSON, filtro linhas/pontos, testes `tests/test_marker_rules_protocol.py` |
-| EFM | Regra, sugestão AD/pontos; **integrado** em `easyfeet_markers/app.py` (barra Ações centralizada, painéis compactos, rodapé recolhível nos painéis) |
+| EFM | Regra, sugestao AD/pontos; **integrado** em `easyfeet_markers/app.py` (header 2 linhas, faixa Acoes alinhada, combo Imagem/Lado, excluir imagem, zoom 100–400%) |
 | App principal `EF.bat` | Cadastro com altura, peso, IMC (?), lateralidade; modal IMC; tabela pacientes com scroll H/V |
 | Dashboard | Total de pacientes; últimos 3 cadastros; `easyfeet/dashboard_ui.py`; `EF_teste_dashboard.bat` |
 | Menu / versão | **Menu v2** (`menu-config-v2.json`): Plantigrafo, Podoscopio, Laudos, Palmilhas…; **v2.0.0** no rodapé (`easyfeet/version.py`); v1.0.0 congelada (tag Git + snapshot) |
@@ -109,34 +142,41 @@ Um EXE/ZIP gerado em `C:\Cursor_Projetos\EasyFeet` (ex.: sessão 2026-05-25) **n
 | Release | Build OneDrive (`dist_new` / `release/` em 2026-05-25); teste diário preferir **`EF.bat`**, não instalador |
 | Protótipos teste | `EF_teste_cadastro.bat`, `EF_teste_modulo.bat`, `EF_teste_dashboard.bat` |
 | Especificação | `especificacao-marcacoes-vinculo-paciente.md` — vínculo paciente, momentos clínicos, licença de módulo |
-| Marcadores Fase 2 (código) | Selector paciente/momento no EFM; Salvar no paciente; histórico em Pacientes; reabertura contextual CLI |
+| Marcadores Fase 2 (codigo) | Selector paciente/momento no EFM; Salvar no paciente; **historico na ficha (Hub → Linha do tempo)**; reabertura contextual CLI |
 | Hub paciente (M2–M3) | Ficha clinica (`paciente_hub`): Resumo, Linha do tempo agrupada por dia, edicao momento, bloco Plantigrafo por imagem; botao «Abrir ficha clinica»; historico marcacoes **saiu** de Pacientes |
 | EFM M4 (B+) | Contexto Hub (`cliente_id` + `momento_id`); Plantigrafo → Analise Hub-first; lado D/E/Ambos; combo Imagem + Excluir imagem; header 2 linhas; faixa Acoes; zoom 100–400% |
 | UX Pacientes | Botao «Novo paciente»; colunas Lateralidade/Email alargadas |
 | Testes Hub | `scripts/test_hub_smoke.py` |
-| UX v2 (doc) | `rascunho-menu-hub-paciente-v2.md` — CRM, Hub, B+; **M1–M4 codigo OK**, M5 pendente |
+| UX v2 (doc) | `rascunho-menu-hub-paciente-v2.md` — CRM, Hub, B+; **M1–M4 codigo OK**, **M5 pausado** |
 | Validação Fase 2 | `roteiro-testes-marcadores-fase2.md` — **concluido** manualmente (A–G, 2026-05-30) |
-| Podoscopio / PDFs | Ficha tecnica: UX, persistencia, PDF branco/preenchido, logo, paginacao, campo paciente (2026-05-28) |
+| Podoscopio / PDFs | Ficha tecnica + PDF branco/preenchido; layout rotulo/valor dinamico (`col_widths_rotulo_valor`); campos em branco sem tracos (2026-06-12) |
+| **Teste Navicular (NAV-0…NAV-4)** | Ficha + BD + Modo A (≤ **10 mm**); PDF ficha (`navicular_pdf.py`); **Laudos** (`navicular_laudos`, `laudos_navicular`, `navicular_laudo_pdf.py`); testes smoke |
 
 ### Ponto de retomada  próximo trabalho sugerido (produto)
 
-Ordem prática para **continuar de onde paramos** (2026-05-30, fim do dia):
+Lista viva: **`lista-de-proximos-passos.md`**.
 
-1. **Agora (M5):** modal «Momentos» na ficha clinica — busca e filtros por data/tipo; ver `rascunho-menu-hub-paciente-v2.md`.
-2. Atalho **Podoscopio** na ficha (hoje stub) — mesmo padrao CRM do Plantigrafo.
-3. **Pendência futura registada:** PEND-MARC-001 comparar imagens entre momentos (palmilhas).
-4. **Documentar delta** em `2026-05-07-status-tecnico-e-pendencias.md` / arquitetura (opcional).
-5. **Release:** só se pedido explicitamente — `build_instalador.bat` na raiz OneDrive; fechar ficheiros em `dist/` antes do build.
+Ordem pratica para **continuar de onde paramos** (pos NAV-1):
+
+1. **Agora (prioridade utilizador):** **NAV-3** — fotos sentado/em pe + Hub/timeline.
+2. **Feito (NAV-4):** ecrã Laudos + textos §4 + PDF laudo por paciente.
+3. **Pausado (M5):** botao «Momentos» + modal busca/filtros na ficha clinica.
+4. Atalho **Podoscopio** na ficha — abrir ficha tecnica com `cliente_id`.
+5. **Pendencia futura:** PEND-MARC-001 comparar imagens entre momentos (palmilhas).
+6. **Opcional:** tag ou snapshot se quiser congelar marco Navicular pos-NAV-2.
+7. **Release:** so se pedido — `build_instalador.bat` na raiz OneDrive.
 
 ### Timesheet
 
-Ultimo consolidado: `timesheet-indice-e-consolidado.md` / `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` — inclui **`2026-05-30-timesheet-horas-trabalhadas.md`**. Totais gerais: **30,58 h** ativas / **68,28 h** decorridas.
+Ultimo consolidado: `timesheet-indice-e-consolidado.md` / `Documentos de Apoio/TimeSheet/timesheet-consolidado.csv` — inclui **`2026-06-12-timesheet-horas-trabalhadas.md`** (2 sessoes no dia). Totais gerais: **43,33 h** ativas / **88,11 h** decorridas.
 
 **Regra activa (novas folhas a partir de 2026-05-30):** pausas **> 20 min** não contam. Folhas até 2026-05-28 mantêm critério **30 min** (legado; não recalcular). Novas folhas diárias: `criterio_pausa_min = 20`.
 
 ### Inventário documental
 
 Cópias não canónicas em `OLD/`; documento vivo de caminho: `caminho-do-projeto.md`.
+
+**Fora de `MDs/` (referencia operacional):** pasta `Documentos de Apoio/` — specs Navicular (`EF - Navicular mm x percentual.md`, plano NAV-0…NAV-5, laudo textos modelo), PDF limiares, TimeSheet CSV; **nao** entra na varredura recursiva de `MDs/` mas deve constar neste gerenciador quando relevante ao produto.
 
 ## Ordem recomendada para entendimento completo
 
@@ -198,10 +238,16 @@ Opcional (nao faz parte do fluxo minimo do produto): snapshots e copias (`OLD/`,
 **Quando ler:** auditoria ou regressao; Fase 2 **concluida** em 2026-05-30.  
 **Perguntas que responde:** O que conferir passo a passo? O que ja passou em smoke/DB? Onde ficam os ficheiros gravados?
 
+### `lista-de-proximos-passos.md`
+
+**Finalidade:** lista viva de trabalho pendente (prioridades, M5, PEND-NAV, backlog MARC).  
+**Quando ler:** ao retomar desenvolvimento ou mudar prioridade entre demandas.  
+**Perguntas que responde:** O que fazer a seguir? O que esta pausado? Qual o ID da pendencia?
+
 ### `rascunho-menu-hub-paciente-v2.md`
 
-**Finalidade:** spec validada do menu v2, Hub paciente-centrado, laudos consolidados, palmilhas transversal, roteiro M1–M4.  
-**Quando ler:** antes de implementar M2 (Hub), M3 (timeline) ou M4 (EFM B+).  
+**Finalidade:** spec validada do menu v2, Hub paciente-centrado, laudos consolidados, palmilhas transversal, roteiro M1–M5.  
+**Quando ler:** antes de implementar M5 (modal Momentos) ou evolucoes do Hub.  
 **Perguntas que responde:** Como fica a navegacao v2? O que entra no Hub? Qual ordem de implementacao?
 
 ### `versionamento-local-easyfeet.md`
@@ -301,6 +347,24 @@ Opcional (nao faz parte do fluxo minimo do produto): snapshots e copias (`OLD/`,
 **Quando ler:** reconciliar horas do dia 28 e retomar contexto tecnico exato da ultima sessao.  
 **Perguntas que responde:** O que foi finalizado no fechamento do dia 28 e quanto tempo foi dedicado?
 
+### `2026-05-30-timesheet-horas-trabalhadas.md`
+
+**Finalidade:** folha diaria **2026-05-30** — M2 Hub, M3 timeline, M4 EFM B+, UX Pacientes/EFM.  
+**Quando ler:** reconciliar horas do dia 30.  
+**Perguntas que responde:** Quanto tempo na sessao Hub/EFM?
+
+### `2026-06-01-timesheet-horas-trabalhadas.md`
+
+**Finalidade:** folha diaria **2026-06-01** — Teste Navicular NAV-0/NAV-1, PDF limiares 10 mm, UX ficha, combo/excluir ficha, laudo MD pendente.  
+**Quando ler:** reconciliar horas do dia 01/06 e retomar contexto Navicular.  
+**Perguntas que responde:** O que foi entregue na sessao Navicular e quanto tempo foi dedicado?
+
+### `2026-06-12-timesheet-horas-trabalhadas.md`
+
+**Finalidade:** folha diaria **2026-06-12** (2 sessoes) — manha: NAV-2 + refino PDFs; tarde: NAV-4 laudos + instalador DEMO.  
+**Quando ler:** reconciliar horas do dia 12/06.  
+**Perguntas que responde:** O que foi entregue nas sessoes NAV-2/NAV-4/DEMO e quanto tempo foi dedicado?
+
 ### `timesheet-indice-e-consolidado.md`
 
 **Finalidade:** consolidar todos os timesheets diarios em uma visao unica por dia/semana/mes e total geral.  
@@ -360,8 +424,19 @@ Exemplo:
 
 - Arquivos: `rascunho-menu-hub-paciente-v2.md`; codigo `menu-config-v2.json`, `easyfeet/gui.py`, `easyfeet/navigation.py`
 - Baseline doc: `rascunho-menu-hub-paciente-v2.md`
-- Estado: **M1–M4 concluidos** (menu v2, Hub, timeline, EFM B+); **M5 pendente** (modal Momentos + filtros).
-- Observacao: EFM abre com contexto da ficha; Plantigrafo → Analise sem paciente mostra ecran Hub-first; Podoscopio atalho na ficha ainda stub.
+- Estado: **M1–M4 concluidos** (commit `e28c34d`); **M5 pausado** (modal Momentos + filtros; atalho Podoscopio).
+- Observacao: timeline agrupada por dia permanece; M5 adiciona busca quando ha muitos momentos. EFM B+ e Plantigrafo Hub-first estaveis.
+
+## Tema: Teste do Navicular (NAV-0…NAV-5)
+
+- Arquivos MDs: `lista-de-proximos-passos.md` (checklist vivo); `especificacao-marcacoes-vinculo-paciente.md` (PEND-NAV-001)
+- Docs de apoio (fora de `MDs/`): `Documentos de Apoio/EF - Navicular mm x percentual.md` + PDF limiares; `EF - Navicular plano de implantacao.md`; `EF - Navicular laudo - textos modelo.md`
+- Codigo: `easyfeet/navicular.py`, `easyfeet/gui.py`, `easyfeet/models.py`, `repositories.py`, `services.py`, `db.py`, `menu-config-v2.json`
+- Baseline doc: plano de implantacao (NAV-0…NAV-5)
+- Estado: **NAV-0 + NAV-1 + NAV-2 concluidos** (ate 2026-06-12) — Modo A ≤ 10 mm (Brody); ficha + BD + combo/excluir; PDF branco/preenchida (`navicular_pdf.py`).
+- **Pendente:** NAV-3 fotos/Hub; NAV-5 Modos B/C.
+- **Concluido:** NAV-4 laudos + **PEND-NAV-LAUDO-001** (2026-05-30).
+- Testes: `scripts/test_navicular_ficha_salvar.py`, `scripts/test_ficha_salva_combo_smoke.py`, `scripts/test_navicular_pdf.py`
 
 ## Tema: versionamento local
 
@@ -471,9 +546,12 @@ Exemplo:
   - `2026-05-09-timesheet-horas-trabalhadas.md`
   - `2026-05-25-timesheet-horas-trabalhadas.md`
   - `2026-05-28-timesheet-horas-trabalhadas.md`
+  - `2026-05-30-timesheet-horas-trabalhadas.md`
+  - `2026-06-01-timesheet-horas-trabalhadas.md`
+  - `2026-06-12-timesheet-horas-trabalhadas.md`
 - Baseline: `2026-05-08-timesheet-horas-trabalhadas.md`
-- Ultima versao: `2026-05-28-timesheet-horas-trabalhadas.md`
-- Mudancas desde baseline: folhas 09, 25 e 28; consolidado atualizado 2026-05-28; **criterio de pausa 20 min** para novas folhas a partir de 2026-05-30 (legado 30 min preservado).
+- Ultima versao: `2026-06-12-timesheet-horas-trabalhadas.md`
+- Mudancas desde baseline: folhas 09, 25, 28, 30, 01/06 e 12/06 (2 sessoes); consolidado atualizado 2026-06-12; totais **43,33 h** ativas / **88,11 h** decorridas; **criterio de pausa 20 min** para novas folhas a partir de 2026-05-30 (legado 30 min preservado).
 - Observacao: atualizacao incremental no mesmo dia pode sobrescrever a folha desse dia; ao virar data, novo `AAAA-MM-DD-timesheet-horas-trabalhadas.md` com `criterio_pausa_min = 20`.
 
 ## Tema: timesheet consolidado (indice e totais)

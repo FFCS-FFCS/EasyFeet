@@ -26,6 +26,8 @@ class Cliente(Base):
     avaliacoes: Mapped[list["Avaliacao"]] = relationship(back_populates="cliente")
     momentos_clinicos: Mapped[list["MomentoClinico"]] = relationship(back_populates="cliente")
     fichas_podoscopio: Mapped[list["FichaPodoscopio"]] = relationship(back_populates="cliente")
+    fichas_navicular: Mapped[list["FichaNavicular"]] = relationship(back_populates="cliente")
+    laudos_navicular: Mapped[list["LaudoNavicular"]] = relationship(back_populates="cliente")
 
 
 class Avaliacao(Base):
@@ -148,3 +150,50 @@ class FichaPodoscopio(Base):
     )
 
     cliente: Mapped["Cliente"] = relationship(back_populates="fichas_podoscopio")
+
+
+class FichaNavicular(Base):
+    __tablename__ = "fichas_navicular"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
+    data_avaliacao: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    rotulo_atendimento: Mapped[str] = mapped_column(String(120), nullable=True, default="")
+    queixa_objetivo: Mapped[str] = mapped_column(Text, nullable=True, default="")
+    altura_sentado_d_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    altura_pe_d_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    queda_d_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    classificacao_d: Mapped[str] = mapped_column(String(20), nullable=True, default="")
+    altura_sentado_e_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    altura_pe_e_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    queda_e_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    classificacao_e: Mapped[str] = mapped_column(String(20), nullable=True, default="")
+    observacoes: Mapped[str] = mapped_column(Text, nullable=True, default="")
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    cliente: Mapped["Cliente"] = relationship(back_populates="fichas_navicular")
+    laudo: Mapped["LaudoNavicular | None"] = relationship(back_populates="ficha_navicular", uselist=False)
+
+
+class LaudoNavicular(Base):
+    __tablename__ = "laudos_navicular"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), nullable=False, index=True)
+    ficha_navicular_id: Mapped[int] = mapped_column(
+        ForeignKey("fichas_navicular.id"), nullable=False, unique=True, index=True
+    )
+    profissional_nome: Mapped[str] = mapped_column(String(120), nullable=True, default="")
+    interpretacao: Mapped[str] = mapped_column(Text, nullable=False)
+    conclusao: Mapped[str] = mapped_column(Text, nullable=False)
+    recomendacoes: Mapped[str] = mapped_column(Text, nullable=True, default="")
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    cliente: Mapped["Cliente"] = relationship(back_populates="laudos_navicular")
+    ficha_navicular: Mapped["FichaNavicular"] = relationship(back_populates="laudo")

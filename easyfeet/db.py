@@ -24,7 +24,9 @@ def init_db() -> None:
         ImagemPlantar,
         Laudo,
         MarcacaoPlantar,
+        FichaNavicular,
         FichaPodoscopio,
+        LaudoNavicular,
         MomentoClinico,
         PalmilhaPedido,
     )

@@ -4,6 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tkinter as tk
@@ -24,6 +25,7 @@ from easyfeet.marker_rules_store import (
     required_item_count,
 )
 from easyfeet.navigation import (
+    collect_nav_accordion_group_ids_for_role,
     collect_nav_module_ids_for_role,
     find_menu_item_path,
     get_visible_child_menu_items,
@@ -47,6 +49,15 @@ from easyfeet.paciente_cadastro_pdf import (
     export_ficha_cadastro_paciente_pdf_branco,
     export_ficha_cadastro_paciente_pdf_preenchida,
 )
+from easyfeet.navicular import (
+    NAVICULAR_LIMIAR_MM,
+    calcular_queda_mm,
+    classificar_modo_a,
+    parse_altura_mm,
+    rotulo_classificacao,
+)
+from easyfeet.navicular_laudo_pdf import export_laudo_navicular_pdf
+from easyfeet.navicular_pdf import export_ficha_navicular_pdf_branco, export_ficha_navicular_pdf_preenchida
 from easyfeet.podoscopio_pdf import export_ficha_podoscopio_pdf_branco, export_ficha_podoscopio_pdf_preenchida
 from easyfeet.services import EasyFeetService, MOMENTO_OBSERVACOES_MAX, MOMENTO_ROTULO_MAX
 from easyfeet.version import format_app_version
@@ -141,9 +152,12 @@ class EasyFeetApp(ctk.CTk):
         self._marker_rules_tree: ttk.Treeview | None = None
         self._editing_rule_id: int | None = None
         self._selected_rule_image: str = ""
-        self._nav_collapsed: set[str] = set()
+        self._nav_collapsed = collect_nav_accordion_group_ids_for_role(
+            self.config_data, self.menu_state.role
+        )
         self._treeview_style_ready = False
         self._podoscopio_ctx: dict[str, int | None] = {"cliente_id": None, "ficha_id": None}
+        self._navicular_ctx: dict[str, int | None] = {"cliente_id": None, "ficha_id": None}
 
         self._build_layout()
         self._render_sidebar()
@@ -530,6 +544,12 @@ class EasyFeetApp(ctk.CTk):
             self._build_podoscopio_hub()
         elif module_id == "podoscopio_ficha_tecnica":
             self._build_podoscopio_ficha_tecnica()
+        elif module_id == "navicular":
+            self._build_navicular_hub()
+        elif module_id == "navicular_ficha_tecnica":
+            self._build_navicular_ficha_tecnica()
+        elif module_id == "navicular_laudos":
+            self._build_navicular_laudos()
         elif module_id == "configuracoes":
             self._build_configuracoes_hub()
         elif module_id == "avaliacao_postural":
@@ -539,6 +559,7 @@ class EasyFeetApp(ctk.CTk):
             "plantigrafo_laudos",
             "podoscopio_laudos",
             "podoscopio_config",
+            "navicular_config",
             "palmilhas",
             "relatorios",
             "postural_avaliacao",
@@ -1131,7 +1152,7 @@ class EasyFeetApp(ctk.CTk):
         def _exportar_pdf_cadastro_branco() -> None:
             default_name = "Cadastro_Paciente_EM_BRANCO.pdf"
             dest = filedialog.asksaveasfilename(
-                title="PDF cadastro em branco (caneta)",
+                title="PDF cadastro em branco",
                 defaultextension=".pdf",
                 initialfile=default_name,
                 filetypes=[("PDF", "*.pdf")],
@@ -1143,7 +1164,7 @@ class EasyFeetApp(ctk.CTk):
             except Exception as exc:
                 messagebox.showerror("Pacientes", f"Falha ao gerar PDF:\n{exc}")
                 return
-            messagebox.showinfo("Pacientes", f"PDF para caneta gerado:\n{dest}")
+            messagebox.showinfo("Pacientes", f"PDF gerado:\n{dest}")
 
         def _exportar_pdf_cadastro_preenchida() -> None:
             selected = _get_selected_cliente()
@@ -2383,6 +2404,21 @@ class EasyFeetApp(ctk.CTk):
         if texto:
             widget.insert("1.0", texto)
 
+    @staticmethod
+    def _resolve_ficha_id_from_combo_label(choice: str, fichas_by_label: dict[str, int]) -> int | None:
+        label = (choice or "").strip()
+        if not label or label == "— Nova ficha —":
+            return None
+        fid = fichas_by_label.get(label)
+        if fid is not None:
+            return fid
+        if label.startswith("#"):
+            try:
+                return int(label.split("—", 1)[0].strip().lstrip("#"))
+            except ValueError:
+                return None
+        return None
+
     def _podoscopio_multiline(self, parent: ctk.CTkFrame, *, lines: int = 4) -> tuple[ctk.CTkFrame, tk.Text]:
         """tk.Text evita falha de foco do CTkTextbox dentro de CTkScrollableFrame."""
         frame = ctk.CTkFrame(parent, fg_color="#F9F9FA", border_width=1, border_color="#979DA2", corner_radius=6)
@@ -2406,12 +2442,1172 @@ class EasyFeetApp(ctk.CTk):
         text.bind("<Button-1>", lambda _e: text.focus_set())
         return frame, text
 
+    def _navicular_mm_entry(self, parent: ctk.CTkFrame) -> tuple[ctk.CTkFrame, tk.Entry]:
+        """tk.Entry evita limite de digitos do CTkEntry dentro de CTkScrollableFrame."""
+        frame = ctk.CTkFrame(parent, fg_color="#F9F9FA", border_width=1, border_color="#979DA2", corner_radius=6)
+        entry = tk.Entry(
+            frame,
+            width=8,
+            font=("Segoe UI", UI_FONT_PT - 1),
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground="#979DA2",
+            highlightcolor="#7c1229",
+            bg="#F9F9FA",
+            fg="#1a1a1a",
+            insertbackground="#1a1a1a",
+        )
+        entry.pack(fill="x", padx=8, pady=6)
+        entry.bind("<Button-1>", lambda _e: entry.focus_set())
+        return frame, entry
+
     def _build_podoscopio_hub(self) -> None:
         self._build_module_hub(
             parent_id="podoscopio",
             intro="Ficha tecnica, laudos e configuracoes do podoscopio. Selecione uma opcao abaixo ou use o menu lateral.",
             child_ids=("podoscopio_ficha_tecnica", "podoscopio_laudos", "podoscopio_config"),
         )
+
+    def _build_navicular_hub(self) -> None:
+        self._build_module_hub(
+            parent_id="navicular",
+            intro=(
+                "Teste da Queda do Navicular: ficha de medicao (sentado e em pe), laudos e configuracoes. "
+                "Classificacao Modo A: ate 10 mm = normal (Brody)."
+            ),
+            child_ids=("navicular_ficha_tecnica", "navicular_laudos", "navicular_config"),
+        )
+
+    def _build_navicular_ficha_tecnica(self) -> None:
+        """Ficha do Teste Navicular — medicao mm, queda calculada, Modo A (Brody ≤ 10 mm)."""
+        root = ctk.CTkScrollableFrame(
+            self.content,
+            fg_color="transparent",
+            scrollbar_button_color="#b8b8b8",
+            scrollbar_button_hover_color="#7c1229",
+        )
+        root.grid(row=0, column=0, sticky="nsew", padx=16, pady=16)
+        root.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ctk.CTkLabel(
+            header,
+            text="Teste Navicular / Ficha de avaliacao",
+            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+            text_color="#333333",
+        ).pack(anchor="w", padx=14, pady=(12, 2))
+        status_label = ctk.CTkLabel(
+            header,
+            text=(
+                f"Modo A (Brody): queda ≤ {NAVICULAR_LIMIAR_MM} mm = normal. "
+                "Medir sentado (subtalar neutro) e em pe (relaxado com carga)."
+            ),
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#666666",
+            wraplength=720,
+            justify="left",
+        )
+        status_label.pack(anchor="w", padx=14, pady=(0, 12))
+
+        form_top = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        form_top.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        form_top.grid_columnconfigure(1, weight=1)
+
+        scroll_host = ctk.CTkFrame(
+            root,
+            fg_color="#ffffff",
+            corner_radius=12,
+            border_width=1,
+            border_color="#ececec",
+        )
+        scroll_host.grid(row=2, column=0, sticky="ew")
+        scroll_host.grid_columnconfigure(0, weight=0)
+        scroll_host.grid_columnconfigure(1, weight=0)
+
+        btn_row = ctk.CTkFrame(root, fg_color="transparent")
+        btn_row.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+
+        clientes = self.service.clientes.listar()
+        paciente_labels = ["— Selecione o paciente —"] + [f"#{c.id} — {c.nome}" for c in clientes]
+        by_paciente_label: dict[str, int] = {f"#{c.id} — {c.nome}": c.id for c in clientes}
+        ficha_atual_id: list[int | None] = [None]
+        fichas_by_label: dict[str, int] = {}
+        _suppress_ficha_combo = [False]
+
+        row = 0
+
+        def section(title: str) -> None:
+            nonlocal row
+            ctk.CTkLabel(
+                scroll_host,
+                text=title,
+                font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+                text_color="#7c1229",
+            ).grid(row=row, column=0, columnspan=2, sticky="w", padx=14, pady=(14, 6))
+            row += 1
+
+        row_top = 0
+
+        def field_on(
+            parent: ctk.CTkFrame,
+            label: str,
+            widget: ctk.CTkBaseClass,
+            *,
+            row_idx: list[int],
+            col_span: int = 1,
+        ) -> None:
+            ctk.CTkLabel(parent, text=label, font=ctk.CTkFont(size=UI_FONT_PT - 1), text_color="#444444").grid(
+                row=row_idx[0], column=0, sticky="nw", padx=(14, 8), pady=4
+            )
+            widget.grid(row=row_idx[0], column=1, sticky="ew", padx=(0, 14), pady=4, columnspan=col_span)
+            row_idx[0] += 1
+
+        def field(label: str, widget: ctk.CTkBaseClass, *, col_span: int = 1, wide: bool = False) -> None:
+            nonlocal row
+            ctk.CTkLabel(
+                scroll_host,
+                text=label,
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#444444",
+            ).grid(row=row, column=0, sticky="nw", padx=(14, 8), pady=6)
+            sticky = "ew" if wide else "w"
+            widget.grid(row=row, column=1, sticky=sticky, padx=(0, 14), pady=6, columnspan=col_span)
+            if wide:
+                scroll_host.grid_columnconfigure(1, weight=1)
+            row += 1
+
+        def field_mm(label: str, entry_frame: ctk.CTkFrame) -> None:
+            field(label, entry_frame)
+
+        def field_result(label: str, value_label: ctk.CTkLabel) -> None:
+            nonlocal row
+            ctk.CTkLabel(
+                scroll_host,
+                text=label,
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#444444",
+            ).grid(row=row, column=0, sticky="nw", padx=(14, 8), pady=4)
+            value_label.grid(row=row, column=1, sticky="w", padx=(0, 14), pady=4)
+            row += 1
+
+        def section_on(parent: ctk.CTkFrame, title: str, row_idx: list[int]) -> None:
+            ctk.CTkLabel(
+                parent,
+                text=title,
+                font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+                text_color="#7c1229",
+            ).grid(row=row_idx[0], column=0, columnspan=2, sticky="w", padx=14, pady=(14, 6))
+            row_idx[0] += 1
+
+        def _cliente_id() -> int | None:
+            label = var_paciente.get().strip()
+            if label.startswith("#") and label in by_paciente_label:
+                return by_paciente_label[label]
+            return None
+
+        def _label_ficha(ficha) -> str:
+            rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
+            return f"#{ficha.id} — {ficha.data_avaliacao.strftime('%d/%m/%Y %H:%M')} — {rot}"
+
+        def _set_ficha_combo(label: str) -> None:
+            _suppress_ficha_combo[0] = True
+            try:
+                combo_ficha.set(label)
+                var_ficha.set(label)
+            finally:
+                _suppress_ficha_combo[0] = False
+
+        def _selecionar_ficha_no_combo(ficha_id: int) -> bool:
+            for lbl, fid in fichas_by_label.items():
+                if fid == ficha_id:
+                    _set_ficha_combo(lbl)
+                    return True
+            return False
+
+        def _refresh_fichas_combo(*, select_ficha_id: int | None = None) -> None:
+            fichas_by_label.clear()
+            cid = _cliente_id()
+            if cid is None:
+                combo_ficha.configure(values=["— Nova ficha —"], state="disabled")
+                _set_ficha_combo("— Nova ficha —")
+                return
+            regs = self.service.fichas_navicular.listar_por_cliente(cid)
+            labels_f = ["— Nova ficha —"]
+            for f in regs:
+                lbl = _label_ficha(f)
+                labels_f.append(lbl)
+                fichas_by_label[lbl] = f.id
+            combo_ficha.configure(values=labels_f, state="readonly")
+            if select_ficha_id is not None and _selecionar_ficha_no_combo(select_ficha_id):
+                return
+            _set_ficha_combo(labels_f[0])
+
+        def _fmt_mm(valor: float | None) -> str:
+            if valor is None:
+                return ""
+            if valor == int(valor):
+                return str(int(valor))
+            return str(valor)
+
+        def _atualizar_calculo_lado(
+            sentado_entry: tk.Entry,
+            pe_entry: tk.Entry,
+            queda_label: ctk.CTkLabel,
+            class_label: ctk.CTkLabel,
+        ) -> None:
+            sentado_txt = sentado_entry.get().strip()
+            pe_txt = pe_entry.get().strip()
+            if not sentado_txt and not pe_txt:
+                queda_label.configure(text="—", text_color="#333333")
+                class_label.configure(text="—", text_color="#333333")
+                return
+            try:
+                sentado = parse_altura_mm(sentado_txt)
+                pe = parse_altura_mm(pe_txt)
+            except ValueError:
+                queda_label.configure(text="—", text_color="#888888")
+                class_label.configure(text="Valor numerico em mm", text_color="#888888")
+                return
+            if sentado is None and pe is None:
+                queda_label.configure(text="—", text_color="#333333")
+                class_label.configure(text="—", text_color="#333333")
+                return
+            if sentado is None or pe is None:
+                queda_label.configure(text="—", text_color="#888888")
+                class_label.configure(text="Preencha sentado e em pe", text_color="#888888")
+                return
+            try:
+                queda = calcular_queda_mm(sentado, pe)
+            except ValueError as exc:
+                queda_label.configure(text="—", text_color="#b00020")
+                class_label.configure(text=str(exc), text_color="#b00020")
+                return
+            cls = classificar_modo_a(queda)
+            queda_label.configure(text=f"{queda:g} mm", text_color="#333333")
+            cor = "#1b5e20" if cls == "normal" else "#b00020"
+            class_label.configure(text=rotulo_classificacao(cls), text_color=cor)
+
+        def _bind_medicao(
+            sentado_entry: tk.Entry,
+            pe_entry: tk.Entry,
+            queda_label: ctk.CTkLabel,
+            class_label: ctk.CTkLabel,
+        ) -> None:
+            def _recalc(_event=None) -> None:
+                _atualizar_calculo_lado(sentado_entry, pe_entry, queda_label, class_label)
+
+            sentado_entry.bind("<KeyRelease>", _recalc)
+            pe_entry.bind("<KeyRelease>", _recalc)
+            sentado_entry.bind("<FocusOut>", _recalc)
+            pe_entry.bind("<FocusOut>", _recalc)
+
+        def _limpar_formulario(*, manter_paciente: bool = True) -> None:
+            ficha_atual_id[0] = None
+            if not manter_paciente:
+                var_paciente.set(paciente_labels[0])
+            data_entry.delete(0, "end")
+            data_entry.insert(0, datetime.now().strftime("%d/%m/%Y %H:%M"))
+            rotulo_entry.delete(0, "end")
+            self._podoscopio_text_set(queixa_text, "")
+            for entry in (sentado_d, pe_d, sentado_e, pe_e):
+                entry.delete(0, "end")
+            _atualizar_calculo_lado(sentado_d, pe_d, queda_d_lbl, class_d_lbl)
+            _atualizar_calculo_lado(sentado_e, pe_e, queda_e_lbl, class_e_lbl)
+            self._podoscopio_text_set(obs_text, "")
+            status_label.configure(text="Nova ficha — preencha e clique em Salvar.")
+
+        def _carregar_ficha(ficha_id: int) -> None:
+            ficha = self.service.fichas_navicular.obter_por_id(ficha_id)
+            if not ficha:
+                messagebox.showerror("Teste Navicular", "Ficha nao encontrada.")
+                return
+            cliente = self.service.clientes.obter_por_id(ficha.cliente_id)
+            if cliente:
+                pl = f"#{cliente.id} — {cliente.nome}"
+                if pl in by_paciente_label and var_paciente.get().strip() != pl:
+                    var_paciente.set(pl)
+            ficha_atual_id[0] = ficha.id
+            data_entry.delete(0, "end")
+            data_entry.insert(0, ficha.data_avaliacao.strftime("%d/%m/%Y %H:%M"))
+            rotulo_entry.delete(0, "end")
+            rotulo_entry.insert(0, ficha.rotulo_atendimento or "")
+            self._podoscopio_text_set(queixa_text, ficha.queixa_objetivo or "")
+            sentado_d.delete(0, "end")
+            sentado_d.insert(0, _fmt_mm(ficha.altura_sentado_d_mm))
+            pe_d.delete(0, "end")
+            pe_d.insert(0, _fmt_mm(ficha.altura_pe_d_mm))
+            sentado_e.delete(0, "end")
+            sentado_e.insert(0, _fmt_mm(ficha.altura_sentado_e_mm))
+            pe_e.delete(0, "end")
+            pe_e.insert(0, _fmt_mm(ficha.altura_pe_e_mm))
+            _atualizar_calculo_lado(sentado_d, pe_d, queda_d_lbl, class_d_lbl)
+            _atualizar_calculo_lado(sentado_e, pe_e, queda_e_lbl, class_e_lbl)
+            self._podoscopio_text_set(obs_text, ficha.observacoes or "")
+            self._navicular_ctx.update(cliente_id=ficha.cliente_id, ficha_id=ficha.id)
+            status_label.configure(
+                text=f"Ficha #{ficha.id} carregada. Ultima atualizacao: {ficha.atualizado_em.strftime('%d/%m/%Y %H:%M')}."
+            )
+
+        def _salvar_ficha() -> None:
+            cid = _cliente_id()
+            if cid is None:
+                messagebox.showinfo("Teste Navicular", "Selecione um paciente cadastrado em Pacientes.")
+                return
+            try:
+                ficha = self.service.salvar_ficha_navicular(
+                    cid,
+                    data_entry.get().strip(),
+                    rotulo_entry.get().strip(),
+                    self._podoscopio_text_get(queixa_text),
+                    sentado_d.get().strip(),
+                    pe_d.get().strip(),
+                    sentado_e.get().strip(),
+                    pe_e.get().strip(),
+                    self._podoscopio_text_get(obs_text),
+                    ficha_id=ficha_atual_id[0],
+                )
+            except ValueError as exc:
+                messagebox.showerror("Teste Navicular", str(exc))
+                return
+            ficha_atual_id[0] = ficha.id
+            self._navicular_ctx.update(cliente_id=cid, ficha_id=ficha.id)
+            _refresh_fichas_combo(select_ficha_id=ficha.id)
+            _atualizar_calculo_lado(sentado_d, pe_d, queda_d_lbl, class_d_lbl)
+            _atualizar_calculo_lado(sentado_e, pe_e, queda_e_lbl, class_e_lbl)
+            status_label.configure(
+                text=f"Ficha #{ficha.id} gravada ({ficha.atualizado_em.strftime('%d/%m/%Y %H:%M')}). "
+                "Use «Ficha salva» para abrir outra avaliacao deste paciente."
+            )
+            messagebox.showinfo("Teste Navicular", f"Ficha #{ficha.id} salva.")
+
+        def _excluir_ficha() -> None:
+            fid = ficha_atual_id[0]
+            if fid is None:
+                messagebox.showinfo(
+                    "Teste Navicular",
+                    "Selecione uma ficha salva para excluir (nao «Nova ficha»).",
+                )
+                return
+            cid = _cliente_id()
+            if cid is None:
+                messagebox.showinfo("Teste Navicular", "Selecione um paciente.")
+                return
+            ficha = self.service.fichas_navicular.obter_por_id(fid)
+            if not ficha:
+                messagebox.showerror("Teste Navicular", "Ficha nao encontrada.")
+                return
+            rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
+            data_txt = ficha.data_avaliacao.strftime("%d/%m/%Y %H:%M")
+            ok = messagebox.askyesno(
+                "Excluir ficha",
+                f"Confirma excluir a ficha #{fid} ({data_txt} — {rot})?\n\nEsta acao nao pode ser desfeita.",
+            )
+            if not ok:
+                return
+            try:
+                self.service.excluir_ficha_navicular(fid, cliente_id=cid)
+            except ValueError as exc:
+                messagebox.showerror("Excluir ficha", str(exc))
+                return
+            self._navicular_ctx.update(ficha_id=None)
+            _limpar_formulario(manter_paciente=True)
+            _set_ficha_combo("— Nova ficha —")
+            _refresh_fichas_combo()
+            status_label.configure(text=f"Ficha #{fid} excluida.")
+            messagebox.showinfo("Excluir ficha", f"Ficha #{fid} removida.")
+
+        def _exportar_pdf_branco() -> None:
+            default_name = "Ficha_Navicular_EM_BRANCO.pdf"
+            dest = filedialog.asksaveasfilename(
+                title="PDF em branco",
+                defaultextension=".pdf",
+                initialfile=default_name,
+                filetypes=[("PDF", "*.pdf")],
+            )
+            if not dest:
+                return
+            try:
+                export_ficha_navicular_pdf_branco(Path(dest))
+            except Exception as exc:
+                messagebox.showerror("Teste Navicular", f"Falha ao gerar PDF:\n{exc}")
+                return
+            status_label.configure(text=f"PDF em branco exportado: {dest}")
+            messagebox.showinfo("Teste Navicular", f"PDF gerado:\n{dest}")
+
+        def _exportar_pdf_preenchida() -> None:
+            cid = _cliente_id()
+            if cid is None:
+                messagebox.showinfo(
+                    "Teste Navicular",
+                    "Selecione um paciente antes de exportar a ficha preenchida.",
+                )
+                return
+            try:
+                ficha = self.service.salvar_ficha_navicular(
+                    cid,
+                    data_entry.get().strip(),
+                    rotulo_entry.get().strip(),
+                    self._podoscopio_text_get(queixa_text),
+                    sentado_d.get().strip(),
+                    pe_d.get().strip(),
+                    sentado_e.get().strip(),
+                    pe_e.get().strip(),
+                    self._podoscopio_text_get(obs_text),
+                    ficha_id=ficha_atual_id[0],
+                )
+            except ValueError as exc:
+                messagebox.showerror("Teste Navicular", str(exc))
+                return
+            ficha_atual_id[0] = ficha.id
+            self._navicular_ctx.update(cliente_id=cid, ficha_id=ficha.id)
+            _refresh_fichas_combo(select_ficha_id=ficha.id)
+            _atualizar_calculo_lado(sentado_d, pe_d, queda_d_lbl, class_d_lbl)
+            _atualizar_calculo_lado(sentado_e, pe_e, queda_e_lbl, class_e_lbl)
+            cliente = self.service.clientes.obter_por_id(cid)
+            if not cliente:
+                return
+            nome_safe = "".join(ch if ch.isalnum() or ch in " -_" else "_" for ch in cliente.nome)[:40]
+            default_name = (
+                f"Ficha_Navicular_PREENCHIDA_{nome_safe}_{ficha.data_avaliacao.strftime('%Y%m%d')}.pdf"
+            )
+            dest = filedialog.asksaveasfilename(
+                title="PDF preenchida (dados do sistema)",
+                defaultextension=".pdf",
+                initialfile=default_name,
+                filetypes=[("PDF", "*.pdf")],
+            )
+            if not dest:
+                return
+            try:
+                export_ficha_navicular_pdf_preenchida(Path(dest), ficha=ficha, paciente_nome=cliente.nome)
+            except Exception as exc:
+                messagebox.showerror("Teste Navicular", f"Falha ao gerar PDF:\n{exc}")
+                return
+            status_label.configure(text=f"PDF preenchida exportado: {dest}")
+            messagebox.showinfo("Teste Navicular", f"PDF com dados do sistema:\n{dest}")
+
+        def _apply_ficha_combo_selection(choice: str | None = None) -> None:
+            if _suppress_ficha_combo[0]:
+                return
+            label = (choice.strip() if choice else combo_ficha.get().strip())
+            if label == "— Nova ficha —":
+                if ficha_atual_id[0] is not None:
+                    _limpar_formulario(manter_paciente=True)
+                    self._navicular_ctx["ficha_id"] = None
+                return
+            fid = self._resolve_ficha_id_from_combo_label(label, fichas_by_label)
+            if fid is None:
+                return
+            if fid == ficha_atual_id[0]:
+                return
+            _carregar_ficha(fid)
+            self._navicular_ctx["ficha_id"] = fid
+
+        def _on_ficha_change(choice: str = "") -> None:
+            _apply_ficha_combo_selection(choice)
+
+        def _on_paciente_change(_choice: str = "") -> None:
+            cid = _cliente_id()
+            _refresh_fichas_combo()
+            if cid is None:
+                self._navicular_ctx.update(cliente_id=None, ficha_id=None)
+                _limpar_formulario(manter_paciente=True)
+                return
+            self._navicular_ctx["cliente_id"] = cid
+            regs = self.service.fichas_navicular.listar_por_cliente(cid)
+            if regs:
+                ultima = regs[0]
+                _carregar_ficha(ultima.id)
+                _set_ficha_combo(_label_ficha(ultima))
+                status_label.configure(
+                    text=f"Ultima ficha do paciente carregada (#{ultima.id}). "
+                    "Escolha «Nova ficha» ou outra entrada em «Ficha salva»."
+                )
+            else:
+                self._navicular_ctx["ficha_id"] = None
+                _limpar_formulario(manter_paciente=True)
+                _set_ficha_combo("— Nova ficha —")
+
+        row_ident = [0]
+        section_on(form_top, "Identificacao", row_ident)
+        var_paciente = tk.StringVar(value=paciente_labels[0])
+        combo_paciente = ctk.CTkComboBox(
+            form_top,
+            values=paciente_labels,
+            variable=var_paciente,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            state="readonly" if clientes else "disabled",
+            command=_on_paciente_change,
+        )
+        field_on(form_top, "Paciente *", combo_paciente, row_idx=row_ident)
+
+        var_ficha = tk.StringVar(value="— Nova ficha —")
+        combo_ficha = ctk.CTkComboBox(
+            form_top,
+            values=["— Nova ficha —"],
+            variable=var_ficha,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            state="disabled",
+            command=_on_ficha_change,
+        )
+        field_on(form_top, "Ficha salva", combo_ficha, row_idx=row_ident)
+        ctk.CTkLabel(
+            form_top,
+            text="Apos salvar, a ficha aparece aqui. Ao voltar nesta tela, selecione o paciente para recarregar.",
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            text_color="#888888",
+            wraplength=720,
+            justify="left",
+        ).grid(row=row_ident[0], column=0, columnspan=2, sticky="w", padx=14, pady=(0, 8))
+        row_ident[0] += 1
+
+        data_entry = ctk.CTkEntry(form_top, font=ctk.CTkFont(size=UI_FONT_PT - 1))
+        data_entry.insert(0, datetime.now().strftime("%d/%m/%Y %H:%M"))
+        field_on(form_top, "Data da avaliacao", data_entry, row_idx=row_ident)
+
+        rotulo_entry = ctk.CTkEntry(
+            form_top,
+            placeholder_text="Ex.: Avaliacao inicial, Retorno 3 meses",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+        )
+        field_on(form_top, "Rotulo do atendimento", rotulo_entry, row_idx=row_ident)
+
+        queixa_frame, queixa_text = self._podoscopio_multiline(form_top, lines=4)
+        field_on(form_top, "Queixa / objetivo", queixa_frame, row_idx=row_ident)
+
+        section("Medicao — pe direito")
+        sentado_d_frame, sentado_d = self._navicular_mm_entry(scroll_host)
+        pe_d_frame, pe_d = self._navicular_mm_entry(scroll_host)
+        queda_d_lbl = ctk.CTkLabel(
+            scroll_host,
+            text="—",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+            anchor="w",
+            justify="left",
+        )
+        class_d_lbl = ctk.CTkLabel(
+            scroll_host,
+            text="—",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+            anchor="w",
+            justify="left",
+            wraplength=420,
+        )
+        field_mm("Altura sentado (mm)", sentado_d_frame)
+        field_mm("Altura em pe (mm)", pe_d_frame)
+        field_result("Queda calculada", queda_d_lbl)
+        field_result(f"Modo A — Brody (limiar {NAVICULAR_LIMIAR_MM} mm)", class_d_lbl)
+        _bind_medicao(sentado_d, pe_d, queda_d_lbl, class_d_lbl)
+
+        section("Medicao — pe esquerdo")
+        sentado_e_frame, sentado_e = self._navicular_mm_entry(scroll_host)
+        pe_e_frame, pe_e = self._navicular_mm_entry(scroll_host)
+        queda_e_lbl = ctk.CTkLabel(
+            scroll_host,
+            text="—",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+            anchor="w",
+            justify="left",
+        )
+        class_e_lbl = ctk.CTkLabel(
+            scroll_host,
+            text="—",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#333333",
+            anchor="w",
+            justify="left",
+            wraplength=420,
+        )
+        field_mm("Altura sentado (mm)", sentado_e_frame)
+        field_mm("Altura em pe (mm)", pe_e_frame)
+        field_result("Queda calculada", queda_e_lbl)
+        field_result(f"Modo A — Brody (limiar {NAVICULAR_LIMIAR_MM} mm)", class_e_lbl)
+        _bind_medicao(sentado_e, pe_e, queda_e_lbl, class_e_lbl)
+
+        ctk.CTkLabel(
+            scroll_host,
+            text=(
+                "Queda = altura sentado − altura em pe. Ilustracoes do protocolo em "
+                "Imagens/TesteNavicular/."
+            ),
+            font=ctk.CTkFont(size=UI_FONT_PT - 2),
+            text_color="#888888",
+            wraplength=700,
+            justify="left",
+        ).grid(row=row, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 8))
+        row += 1
+
+        section("Observacoes clinicas")
+        obs_frame, obs_text = self._podoscopio_multiline(scroll_host, lines=5)
+        field("Observacoes", obs_frame, wide=True)
+
+        section("Registro fotografico")
+        ctk.CTkLabel(
+            scroll_host,
+            text="Proxima etapa (NAV-3): foto sentado e em pe por lado.",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#666666",
+        ).grid(row=row, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 8))
+        row += 1
+        fotos_placeholder = ctk.CTkFrame(scroll_host, fg_color="#f8f8f8", corner_radius=8, height=80)
+        fotos_placeholder.grid(row=row, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 8))
+        ctk.CTkLabel(
+            fotos_placeholder,
+            text="Area de imagens — em breve",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#888888",
+        ).pack(expand=True, pady=24)
+        row += 1
+
+        ctk.CTkButton(
+            btn_row,
+            text="Nova ficha",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=lambda: (
+                _limpar_formulario(manter_paciente=True),
+                _set_ficha_combo("— Nova ficha —"),
+                self._navicular_ctx.update(ficha_id=None),
+            ),
+        ).pack(side="left")
+        ctk.CTkButton(
+            btn_row,
+            text="Salvar ficha",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=_salvar_ficha,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="Excluir ficha",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#b00020",
+            hover_color="#fde8e8",
+            border_width=1,
+            border_color="#b00020",
+            command=_excluir_ficha,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="PDF em branco",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=_exportar_pdf_branco,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="PDF preenchida",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=_exportar_pdf_preenchida,
+        ).pack(side="left", padx=(8, 0))
+
+        if not clientes:
+            ctk.CTkLabel(
+                form_top,
+                text="Nenhum paciente cadastrado. Cadastre em Pacientes para usar a ficha.",
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#b00020",
+            ).grid(row=row_ident[0], column=0, columnspan=2, sticky="w", padx=14, pady=(0, 8))
+
+        ctx = self._navicular_ctx
+        if ctx.get("cliente_id"):
+            for lbl, cid in by_paciente_label.items():
+                if cid == ctx["cliente_id"]:
+                    var_paciente.set(lbl)
+                    break
+            _refresh_fichas_combo(select_ficha_id=ctx.get("ficha_id"))
+            if ctx.get("ficha_id"):
+                _carregar_ficha(ctx["ficha_id"])
+            elif _cliente_id() is not None:
+                _on_paciente_change()
+
+    def _build_navicular_laudos(self) -> None:
+        """Ecrã Laudos Navicular — gerar, salvar, listar e exportar PDF por paciente (NAV-4)."""
+        root = ctk.CTkScrollableFrame(
+            self.content,
+            fg_color="transparent",
+            scrollbar_button_color="#b8b8b8",
+            scrollbar_button_hover_color="#7c1229",
+        )
+        root.grid(row=0, column=0, sticky="nsew", padx=16, pady=16)
+        root.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ctk.CTkLabel(
+            header,
+            text="Teste Navicular / Laudos",
+            font=ctk.CTkFont(size=UI_FONT_PT, weight="bold"),
+            text_color="#333333",
+        ).pack(anchor="w", padx=14, pady=(12, 2))
+        status_label = ctk.CTkLabel(
+            header,
+            text=(
+                f"Gere o laudo clinico a partir de uma ficha salva (Modo A — Brody, limiar {NAVICULAR_LIMIAR_MM} mm). "
+                "Textos-modelo conforme documento de apoio."
+            ),
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            text_color="#666666",
+            wraplength=720,
+            justify="left",
+        )
+        status_label.pack(anchor="w", padx=14, pady=(0, 12))
+
+        form = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        form.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        form.grid_columnconfigure(1, weight=1)
+
+        text_host = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#ececec")
+        text_host.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        text_host.grid_columnconfigure(1, weight=1)
+
+        btn_row = ctk.CTkFrame(root, fg_color="transparent")
+        btn_row.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+
+        clientes = self.service.clientes.listar()
+        paciente_labels = ["— Selecione o paciente —"] + [f"#{c.id} — {c.nome}" for c in clientes]
+        by_paciente_label: dict[str, int] = {f"#{c.id} — {c.nome}": c.id for c in clientes}
+        fichas_by_label: dict[str, int] = {}
+        laudos_by_label: dict[str, int] = {}
+        laudo_atual_id: list[int | None] = [None]
+        _suppress_ficha_combo = [False]
+        _suppress_laudo_combo = [False]
+
+        def _cliente_id() -> int | None:
+            label = var_paciente.get().strip()
+            if label.startswith("#") and label in by_paciente_label:
+                return by_paciente_label[label]
+            return None
+
+        def _label_ficha(ficha) -> str:
+            rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
+            return f"#{ficha.id} — {ficha.data_avaliacao.strftime('%d/%m/%Y %H:%M')} — {rot}"
+
+        def _label_laudo(laudo) -> str:
+            ficha = self.service.fichas_navicular.obter_por_id(laudo.ficha_navicular_id)
+            rot = ""
+            if ficha:
+                rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
+            return (
+                f"#{laudo.id} — ficha #{laudo.ficha_navicular_id} — "
+                f"{laudo.criado_em.strftime('%d/%m/%Y %H:%M')} — {rot}"
+            )
+
+        def _limpar_textos() -> None:
+            laudo_atual_id[0] = None
+            prof_entry.delete(0, "end")
+            for w in (interp_text, concl_text, recom_text):
+                w.delete("1.0", "end")
+
+        def _preencher_laudo(laudo) -> None:
+            laudo_atual_id[0] = laudo.id
+            prof_entry.delete(0, "end")
+            prof_entry.insert(0, laudo.profissional_nome or "")
+            interp_text.delete("1.0", "end")
+            interp_text.insert("1.0", laudo.interpretacao or "")
+            concl_text.delete("1.0", "end")
+            concl_text.insert("1.0", laudo.conclusao or "")
+            recom_text.delete("1.0", "end")
+            recom_text.insert("1.0", laudo.recomendacoes or "")
+
+        def _set_ficha_combo(label: str) -> None:
+            _suppress_ficha_combo[0] = True
+            try:
+                combo_ficha.set(label)
+                var_ficha.set(label)
+            finally:
+                _suppress_ficha_combo[0] = False
+
+        def _set_laudo_combo(label: str) -> None:
+            _suppress_laudo_combo[0] = True
+            try:
+                combo_laudo.set(label)
+                var_laudo.set(label)
+            finally:
+                _suppress_laudo_combo[0] = False
+
+        def _refresh_fichas_combo(*, select_ficha_id: int | None = None) -> None:
+            fichas_by_label.clear()
+            cid = _cliente_id()
+            if cid is None:
+                combo_ficha.configure(values=["— Selecione uma ficha —"], state="disabled")
+                _set_ficha_combo("— Selecione uma ficha —")
+                return
+            regs = self.service.fichas_navicular.listar_por_cliente(cid)
+            labels_f = ["— Selecione uma ficha —"]
+            for f in regs:
+                lbl = _label_ficha(f)
+                labels_f.append(lbl)
+                fichas_by_label[lbl] = f.id
+            combo_ficha.configure(values=labels_f, state="readonly" if regs else "disabled")
+            if select_ficha_id is not None:
+                for lbl, fid in fichas_by_label.items():
+                    if fid == select_ficha_id:
+                        _set_ficha_combo(lbl)
+                        return
+            _set_ficha_combo(labels_f[0])
+
+        def _refresh_laudos_combo(*, select_laudo_id: int | None = None) -> None:
+            laudos_by_label.clear()
+            cid = _cliente_id()
+            if cid is None:
+                combo_laudo.configure(values=["— Nenhum laudo —"], state="disabled")
+                _set_laudo_combo("— Nenhum laudo —")
+                return
+            regs = self.service.laudos_navicular.listar_por_cliente(cid)
+            labels_l = ["— Nenhum laudo —"]
+            for laudo in regs:
+                lbl = _label_laudo(laudo)
+                labels_l.append(lbl)
+                laudos_by_label[lbl] = laudo.id
+            combo_laudo.configure(values=labels_l, state="readonly" if regs else "disabled")
+            if select_laudo_id is not None:
+                for lbl, lid in laudos_by_label.items():
+                    if lid == select_laudo_id:
+                        _set_laudo_combo(lbl)
+                        return
+            _set_laudo_combo(labels_l[0])
+
+        def _ficha_id_selecionada() -> int | None:
+            label = combo_ficha.get().strip()
+            return fichas_by_label.get(label)
+
+        def _carregar_laudo_da_ficha(fid: int) -> None:
+            laudo = self.service.laudos_navicular.obter_por_ficha(fid)
+            if laudo:
+                _preencher_laudo(laudo)
+                _refresh_laudos_combo(select_laudo_id=laudo.id)
+                status_label.configure(text=f"Laudo #{laudo.id} carregado para a ficha #{fid}.")
+            else:
+                _limpar_textos()
+                status_label.configure(text=f"Ficha #{fid} selecionada — ainda sem laudo salvo.")
+
+        def _on_ficha_change(choice: str = "") -> None:
+            if _suppress_ficha_combo[0]:
+                return
+            label = (choice.strip() if choice else combo_ficha.get().strip())
+            fid = fichas_by_label.get(label)
+            if fid is None:
+                _limpar_textos()
+                return
+            if _suppress_laudo_combo[0]:
+                return
+            _set_laudo_combo("— Nenhum laudo —")
+            _carregar_laudo_da_ficha(fid)
+
+        def _on_laudo_change(choice: str = "") -> None:
+            if _suppress_laudo_combo[0]:
+                return
+            label = (choice.strip() if choice else combo_laudo.get().strip())
+            lid = laudos_by_label.get(label)
+            if lid is None:
+                return
+            laudo = self.service.laudos_navicular.obter_por_id(lid)
+            if not laudo:
+                return
+            _suppress_ficha_combo[0] = True
+            try:
+                ficha = self.service.fichas_navicular.obter_por_id(laudo.ficha_navicular_id)
+                if ficha:
+                    _set_ficha_combo(_label_ficha(ficha))
+            finally:
+                _suppress_ficha_combo[0] = False
+            _preencher_laudo(laudo)
+            status_label.configure(text=f"Laudo #{laudo.id} carregado.")
+
+        def _on_paciente_change(_choice: str = "") -> None:
+            cid = _cliente_id()
+            _refresh_fichas_combo()
+            _refresh_laudos_combo()
+            _limpar_textos()
+            if cid is None:
+                status_label.configure(text="Selecione um paciente para listar fichas e laudos.")
+                return
+            fichas = self.service.fichas_navicular.listar_por_cliente(cid)
+            if fichas:
+                ultima = fichas[0]
+                _set_ficha_combo(_label_ficha(ultima))
+                _carregar_laudo_da_ficha(ultima.id)
+            else:
+                status_label.configure(text="Paciente sem fichas navicular — preencha a ficha tecnica primeiro.")
+
+        def _gerar_textos() -> None:
+            fid = _ficha_id_selecionada()
+            if fid is None:
+                messagebox.showinfo("Laudos Navicular", "Selecione uma ficha salva.")
+                return
+            try:
+                textos = self.service.textos_laudo_navicular_de_ficha(fid)
+            except ValueError as exc:
+                messagebox.showerror("Laudos Navicular", str(exc))
+                return
+            interp_text.delete("1.0", "end")
+            interp_text.insert("1.0", textos["interpretacao"])
+            concl_text.delete("1.0", "end")
+            concl_text.insert("1.0", textos["conclusao"])
+            recom_text.delete("1.0", "end")
+            recom_text.insert("1.0", textos["recomendacoes"])
+            status_label.configure(text="Textos gerados a partir da ficha. Revise e salve.")
+
+        def _salvar_laudo() -> None:
+            cid = _cliente_id()
+            fid = _ficha_id_selecionada()
+            if cid is None:
+                messagebox.showinfo("Laudos Navicular", "Selecione um paciente.")
+                return
+            if fid is None:
+                messagebox.showinfo("Laudos Navicular", "Selecione uma ficha salva.")
+                return
+            try:
+                laudo = self.service.salvar_laudo_navicular(
+                    cid,
+                    fid,
+                    prof_entry.get().strip(),
+                    self._podoscopio_text_get(interp_text),
+                    self._podoscopio_text_get(concl_text),
+                    self._podoscopio_text_get(recom_text),
+                    laudo_id=laudo_atual_id[0],
+                )
+            except ValueError as exc:
+                messagebox.showerror("Laudos Navicular", str(exc))
+                return
+            laudo_atual_id[0] = laudo.id
+            _refresh_laudos_combo(select_laudo_id=laudo.id)
+            status_label.configure(text=f"Laudo #{laudo.id} salvo.")
+            messagebox.showinfo("Laudos Navicular", f"Laudo #{laudo.id} salvo com sucesso.")
+
+        def _exportar_pdf() -> None:
+            cid = _cliente_id()
+            fid = _ficha_id_selecionada()
+            if cid is None or fid is None:
+                messagebox.showinfo("Laudos Navicular", "Selecione paciente e ficha.")
+                return
+            try:
+                laudo = self.service.salvar_laudo_navicular(
+                    cid,
+                    fid,
+                    prof_entry.get().strip(),
+                    self._podoscopio_text_get(interp_text),
+                    self._podoscopio_text_get(concl_text),
+                    self._podoscopio_text_get(recom_text),
+                    laudo_id=laudo_atual_id[0],
+                )
+            except ValueError as exc:
+                messagebox.showerror("Laudos Navicular", str(exc))
+                return
+            laudo_atual_id[0] = laudo.id
+            ficha = self.service.fichas_navicular.obter_por_id(fid)
+            cliente = self.service.clientes.obter_por_id(cid)
+            if not ficha or not cliente:
+                return
+            nome_safe = "".join(ch if ch.isalnum() or ch in " -_" else "_" for ch in cliente.nome)[:40]
+            default_name = f"Laudo_Navicular_{nome_safe}_{laudo.criado_em.strftime('%Y%m%d')}.pdf"
+            dest = filedialog.asksaveasfilename(
+                title="Exportar laudo PDF",
+                defaultextension=".pdf",
+                initialfile=default_name,
+                filetypes=[("PDF", "*.pdf")],
+            )
+            if not dest:
+                return
+            try:
+                export_laudo_navicular_pdf(
+                    Path(dest),
+                    laudo=laudo,
+                    ficha=ficha,
+                    paciente_nome=cliente.nome,
+                )
+            except Exception as exc:
+                messagebox.showerror("Laudos Navicular", f"Falha ao gerar PDF:\n{exc}")
+                return
+            _refresh_laudos_combo(select_laudo_id=laudo.id)
+            status_label.configure(text=f"PDF exportado: {dest}")
+            messagebox.showinfo("Laudos Navicular", f"PDF gerado:\n{dest}")
+
+        def _excluir_laudo() -> None:
+            lid = laudo_atual_id[0]
+            if lid is None:
+                messagebox.showinfo("Laudos Navicular", "Nenhum laudo carregado para excluir.")
+                return
+            cid = _cliente_id()
+            ok = messagebox.askyesno(
+                "Excluir laudo",
+                f"Confirma excluir o laudo #{lid}?\n\nEsta acao nao pode ser desfeita.",
+            )
+            if not ok:
+                return
+            try:
+                self.service.excluir_laudo_navicular(lid, cliente_id=cid)
+            except ValueError as exc:
+                messagebox.showerror("Excluir laudo", str(exc))
+                return
+            _limpar_textos()
+            _refresh_laudos_combo()
+            status_label.configure(text=f"Laudo #{lid} excluido.")
+            messagebox.showinfo("Excluir laudo", f"Laudo #{lid} removido.")
+
+        row = 0
+
+        def field(label: str, widget: ctk.CTkBaseClass) -> None:
+            nonlocal row
+            ctk.CTkLabel(
+                form,
+                text=label,
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#444444",
+            ).grid(row=row, column=0, sticky="nw", padx=(14, 8), pady=6)
+            widget.grid(row=row, column=1, sticky="ew", padx=(0, 14), pady=6)
+            row += 1
+
+        var_paciente = tk.StringVar(value=paciente_labels[0])
+        combo_paciente = ctk.CTkComboBox(
+            form,
+            values=paciente_labels,
+            variable=var_paciente,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            state="readonly" if clientes else "disabled",
+            command=_on_paciente_change,
+        )
+        field("Paciente *", combo_paciente)
+
+        var_ficha = tk.StringVar(value="— Selecione uma ficha —")
+        combo_ficha = ctk.CTkComboBox(
+            form,
+            values=["— Selecione uma ficha —"],
+            variable=var_ficha,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            state="disabled",
+            command=_on_ficha_change,
+        )
+        field("Ficha salva *", combo_ficha)
+
+        var_laudo = tk.StringVar(value="— Nenhum laudo —")
+        combo_laudo = ctk.CTkComboBox(
+            form,
+            values=["— Nenhum laudo —"],
+            variable=var_laudo,
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            state="disabled",
+            command=_on_laudo_change,
+        )
+        field("Laudo salvo", combo_laudo)
+
+        prof_entry = ctk.CTkEntry(
+            form,
+            placeholder_text="Nome do profissional responsavel",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+        )
+        field("Profissional", prof_entry)
+
+        def field_text(label: str, frame: ctk.CTkFrame) -> None:
+            nonlocal row
+            ctk.CTkLabel(
+                text_host,
+                text=label,
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#444444",
+            ).grid(row=row, column=0, sticky="nw", padx=(14, 8), pady=6)
+            frame.grid(row=row, column=1, sticky="ew", padx=(0, 14), pady=6)
+            row += 1
+
+        row = 0
+        interp_frame, interp_text = self._podoscopio_multiline(text_host, lines=6)
+        field_text("Interpretacao *", interp_frame)
+        concl_frame, concl_text = self._podoscopio_multiline(text_host, lines=3)
+        field_text("Conclusao *", concl_frame)
+        recom_frame, recom_text = self._podoscopio_multiline(text_host, lines=8)
+        field_text("Recomendacoes", recom_frame)
+
+        ctk.CTkButton(
+            btn_row,
+            text="Gerar textos da ficha",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=_gerar_textos,
+        ).pack(side="left")
+        ctk.CTkButton(
+            btn_row,
+            text="Salvar laudo",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#7c1229",
+            hover_color="#5b0717",
+            command=_salvar_laudo,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="PDF laudo",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#7c1229",
+            hover_color="#f0dbe1",
+            border_width=1,
+            border_color="#7c1229",
+            command=_exportar_pdf,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="Excluir laudo",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#b00020",
+            hover_color="#fde8e8",
+            border_width=1,
+            border_color="#b00020",
+            command=_excluir_laudo,
+        ).pack(side="left", padx=(8, 0))
+
+        if not clientes:
+            ctk.CTkLabel(
+                form,
+                text="Nenhum paciente cadastrado. Cadastre em Pacientes para gerar laudos.",
+                font=ctk.CTkFont(size=UI_FONT_PT - 1),
+                text_color="#b00020",
+            ).grid(row=row, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 8))
+
+        ctx = self._navicular_ctx
+        if ctx.get("cliente_id"):
+            for lbl, cid in by_paciente_label.items():
+                if cid == ctx["cliente_id"]:
+                    var_paciente.set(lbl)
+                    break
+            _refresh_fichas_combo(select_ficha_id=ctx.get("ficha_id"))
+            _refresh_laudos_combo()
+            if ctx.get("ficha_id"):
+                _carregar_laudo_da_ficha(ctx["ficha_id"])
+
+    def _abrir_documento_apoio(self, nome_arquivo: str) -> None:
+        path = Path(__file__).resolve().parents[1] / "Documentos de Apoio" / nome_arquivo
+        if not path.is_file():
+            messagebox.showinfo("Documento", f"Ficheiro nao encontrado:\n{path}")
+            return
+        try:
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        except Exception as exc:
+            messagebox.showerror("Documento", f"Nao foi possivel abrir:\n{exc}")
 
     def _build_podoscopio_ficha_tecnica(self) -> None:
         """Ficha tecnica de podoscopia: edicao, gravacao na BD e exportacao PDF."""
@@ -2462,6 +3658,7 @@ class EasyFeetApp(ctk.CTk):
         by_paciente_label: dict[str, int] = {f"#{c.id} — {c.nome}": c.id for c in clientes}
         ficha_atual_id: list[int | None] = [None]
         fichas_by_label: dict[str, int] = {}
+        _suppress_ficha_combo = [False]
         press_vars: dict[str, tk.BooleanVar] = {}
 
         row = 0
@@ -2522,10 +3719,18 @@ class EasyFeetApp(ctk.CTk):
             rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
             return f"#{ficha.id} — {ficha.data_avaliacao.strftime('%d/%m/%Y %H:%M')} — {rot}"
 
+        def _set_ficha_combo(label: str) -> None:
+            _suppress_ficha_combo[0] = True
+            try:
+                combo_ficha.set(label)
+                var_ficha.set(label)
+            finally:
+                _suppress_ficha_combo[0] = False
+
         def _selecionar_ficha_no_combo(ficha_id: int) -> bool:
             for lbl, fid in fichas_by_label.items():
                 if fid == ficha_id:
-                    var_ficha.set(lbl)
+                    _set_ficha_combo(lbl)
                     return True
             return False
 
@@ -2534,7 +3739,7 @@ class EasyFeetApp(ctk.CTk):
             cid = _cliente_id()
             if cid is None:
                 combo_ficha.configure(values=["— Nova ficha —"], state="disabled")
-                var_ficha.set("— Nova ficha —")
+                _set_ficha_combo("— Nova ficha —")
                 return
             regs = self.service.fichas_podoscopio.listar_por_cliente(cid)
             labels_f = ["— Nova ficha —"]
@@ -2545,7 +3750,7 @@ class EasyFeetApp(ctk.CTk):
             combo_ficha.configure(values=labels_f, state="readonly")
             if select_ficha_id is not None and _selecionar_ficha_no_combo(select_ficha_id):
                 return
-            var_ficha.set(labels_f[0])
+            _set_ficha_combo(labels_f[0])
 
         def _limpar_formulario(*, manter_paciente: bool = True) -> None:
             ficha_atual_id[0] = None
@@ -2573,7 +3778,7 @@ class EasyFeetApp(ctk.CTk):
             cliente = self.service.clientes.obter_por_id(ficha.cliente_id)
             if cliente:
                 pl = f"#{cliente.id} — {cliente.nome}"
-                if pl in by_paciente_label:
+                if pl in by_paciente_label and var_paciente.get().strip() != pl:
                     var_paciente.set(pl)
             ficha_atual_id[0] = ficha.id
             data_entry.delete(0, "end")
@@ -2593,7 +3798,7 @@ class EasyFeetApp(ctk.CTk):
                 if z in press_vars:
                     press_vars[z].set(True)
             self._podoscopio_text_set(obs_text, ficha.observacoes or "")
-            self._podoscopio_ctx = {"cliente_id": ficha.cliente_id, "ficha_id": ficha.id}
+            self._podoscopio_ctx.update(cliente_id=ficha.cliente_id, ficha_id=ficha.id)
             status_label.configure(
                 text=f"Ficha #{ficha.id} carregada. Ultima atualizacao: {ficha.atualizado_em.strftime('%d/%m/%Y %H:%M')}."
             )
@@ -2625,7 +3830,7 @@ class EasyFeetApp(ctk.CTk):
                 messagebox.showerror("Ficha tecnica", str(exc))
                 return
             ficha_atual_id[0] = ficha.id
-            self._podoscopio_ctx = {"cliente_id": cid, "ficha_id": ficha.id}
+            self._podoscopio_ctx.update(cliente_id=cid, ficha_id=ficha.id)
             _refresh_fichas_combo(select_ficha_id=ficha.id)
             status_label.configure(
                 text=f"Ficha #{ficha.id} gravada ({ficha.atualizado_em.strftime('%d/%m/%Y %H:%M')}). "
@@ -2633,10 +3838,46 @@ class EasyFeetApp(ctk.CTk):
             )
             messagebox.showinfo("Ficha tecnica", f"Ficha #{ficha.id} salva.")
 
+        def _excluir_ficha() -> None:
+            fid = ficha_atual_id[0]
+            if fid is None:
+                messagebox.showinfo(
+                    "Ficha tecnica",
+                    "Selecione uma ficha salva para excluir (nao «Nova ficha»).",
+                )
+                return
+            cid = _cliente_id()
+            if cid is None:
+                messagebox.showinfo("Ficha tecnica", "Selecione um paciente.")
+                return
+            ficha = self.service.fichas_podoscopio.obter_por_id(fid)
+            if not ficha:
+                messagebox.showerror("Ficha tecnica", "Ficha nao encontrada.")
+                return
+            rot = (ficha.rotulo_atendimento or "Sem rotulo").strip()
+            data_txt = ficha.data_avaliacao.strftime("%d/%m/%Y %H:%M")
+            ok = messagebox.askyesno(
+                "Excluir ficha",
+                f"Confirma excluir a ficha #{fid} ({data_txt} — {rot})?\n\nEsta acao nao pode ser desfeita.",
+            )
+            if not ok:
+                return
+            try:
+                self.service.excluir_ficha_podoscopio(fid, cliente_id=cid)
+            except ValueError as exc:
+                messagebox.showerror("Excluir ficha", str(exc))
+                return
+            self._podoscopio_ctx.update(ficha_id=None)
+            _limpar_formulario(manter_paciente=True)
+            _set_ficha_combo("— Nova ficha —")
+            _refresh_fichas_combo()
+            status_label.configure(text=f"Ficha #{fid} excluida.")
+            messagebox.showinfo("Excluir ficha", f"Ficha #{fid} removida.")
+
         def _exportar_pdf_branco() -> None:
             default_name = "Ficha_Podoscopio_EM_BRANCO.pdf"
             dest = filedialog.asksaveasfilename(
-                title="PDF em branco (preencher a caneta)",
+                title="PDF em branco",
                 defaultextension=".pdf",
                 initialfile=default_name,
                 filetypes=[("PDF", "*.pdf")],
@@ -2649,7 +3890,7 @@ class EasyFeetApp(ctk.CTk):
                 messagebox.showerror("Ficha tecnica", f"Falha ao gerar PDF:\n{exc}")
                 return
             status_label.configure(text=f"PDF em branco exportado: {dest}")
-            messagebox.showinfo("Ficha tecnica", f"PDF para impressao/caneta:\n{dest}")
+            messagebox.showinfo("Ficha tecnica", f"PDF gerado:\n{dest}")
 
         def _exportar_pdf_preenchida() -> None:
             cid = _cliente_id()
@@ -2675,7 +3916,7 @@ class EasyFeetApp(ctk.CTk):
                 messagebox.showerror("Ficha tecnica", str(exc))
                 return
             ficha_atual_id[0] = ficha.id
-            self._podoscopio_ctx = {"cliente_id": cid, "ficha_id": ficha.id}
+            self._podoscopio_ctx.update(cliente_id=cid, ficha_id=ficha.id)
             _refresh_fichas_combo(select_ficha_id=ficha.id)
             cliente = self.service.clientes.obter_por_id(cid)
             if not cliente:
@@ -2698,11 +3939,31 @@ class EasyFeetApp(ctk.CTk):
             status_label.configure(text=f"PDF preenchida exportado: {dest}")
             messagebox.showinfo("Ficha tecnica", f"PDF com dados do sistema:\n{dest}")
 
+        def _apply_ficha_combo_selection(choice: str | None = None) -> None:
+            if _suppress_ficha_combo[0]:
+                return
+            label = (choice.strip() if choice else combo_ficha.get().strip())
+            if label == "— Nova ficha —":
+                if ficha_atual_id[0] is not None:
+                    _limpar_formulario(manter_paciente=True)
+                    self._podoscopio_ctx["ficha_id"] = None
+                return
+            fid = self._resolve_ficha_id_from_combo_label(label, fichas_by_label)
+            if fid is None:
+                return
+            if fid == ficha_atual_id[0]:
+                return
+            _carregar_ficha(fid)
+            self._podoscopio_ctx["ficha_id"] = fid
+
+        def _on_ficha_change(choice: str = "") -> None:
+            _apply_ficha_combo_selection(choice)
+
         def _on_paciente_change(_choice: str = "") -> None:
             cid = _cliente_id()
             _refresh_fichas_combo()
             if cid is None:
-                self._podoscopio_ctx = {"cliente_id": None, "ficha_id": None}
+                self._podoscopio_ctx.update(cliente_id=None, ficha_id=None)
                 _limpar_formulario(manter_paciente=True)
                 return
             self._podoscopio_ctx["cliente_id"] = cid
@@ -2710,7 +3971,7 @@ class EasyFeetApp(ctk.CTk):
             if regs:
                 ultima = regs[0]
                 _carregar_ficha(ultima.id)
-                _refresh_fichas_combo(select_ficha_id=ultima.id)
+                _set_ficha_combo(_label_ficha(ultima))
                 status_label.configure(
                     text=f"Ultima ficha do paciente carregada (#{ultima.id}). "
                     "Escolha «Nova ficha» ou outra entrada em «Ficha salva»."
@@ -2718,16 +3979,7 @@ class EasyFeetApp(ctk.CTk):
             else:
                 self._podoscopio_ctx["ficha_id"] = None
                 _limpar_formulario(manter_paciente=True)
-                var_ficha.set("— Nova ficha —")
-
-        def _on_ficha_change(choice: str) -> None:
-            if choice == "— Nova ficha —":
-                _limpar_formulario(manter_paciente=True)
-                return
-            fid = fichas_by_label.get(choice)
-            if fid is not None:
-                _carregar_ficha(fid)
-                self._podoscopio_ctx["ficha_id"] = fid
+                _set_ficha_combo("— Nova ficha —")
 
         row_ident = [0]
         section_on(form_top, "Identificacao", row_ident)
@@ -2848,7 +4100,7 @@ class EasyFeetApp(ctk.CTk):
             border_color="#7c1229",
             command=lambda: (
                 _limpar_formulario(manter_paciente=True),
-                var_ficha.set("— Nova ficha —"),
+                _set_ficha_combo("— Nova ficha —"),
                 self._podoscopio_ctx.update(ficha_id=None),
             ),
         ).pack(side="left")
@@ -2862,7 +4114,18 @@ class EasyFeetApp(ctk.CTk):
         ).pack(side="left", padx=(8, 0))
         ctk.CTkButton(
             btn_row,
-            text="PDF em branco (caneta)",
+            text="Excluir ficha",
+            font=ctk.CTkFont(size=UI_FONT_PT - 1),
+            fg_color="#ffffff",
+            text_color="#b00020",
+            hover_color="#fde8e8",
+            border_width=1,
+            border_color="#b00020",
+            command=_excluir_ficha,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            btn_row,
+            text="PDF em branco",
             font=ctk.CTkFont(size=UI_FONT_PT - 1),
             fg_color="#ffffff",
             text_color="#7c1229",
@@ -3406,6 +4669,9 @@ class EasyFeetApp(ctk.CTk):
 
     def _on_role_change(self, selected_role: str) -> None:
         self.menu_state.role = selected_role
+        self._nav_collapsed = collect_nav_accordion_group_ids_for_role(
+            self.config_data, self.menu_state.role
+        )
         ids = collect_nav_module_ids_for_role(self.config_data, self.menu_state.role)
         if self.menu_state.current_module not in ids:
             visible = get_visible_menu_for_role(self.config_data, self.menu_state.role)

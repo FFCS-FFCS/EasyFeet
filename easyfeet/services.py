@@ -5,14 +5,23 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from easyfeet.cliente_dados_corporais import validar_altura_metros, validar_lateralidade, validar_peso_kg
-from easyfeet.models import FichaPodoscopio, MomentoClinico
+from easyfeet.models import FichaNavicular, FichaPodoscopio, LaudoNavicular, MomentoClinico
+from easyfeet.navicular_laudo import gerar_textos_laudo
+from easyfeet.navicular import (
+    NAVICULAR_LIMIAR_MM,
+    calcular_queda_mm,
+    classificar_modo_a,
+    parse_altura_mm,
+)
 
 MOMENTO_ROTULO_MAX = 120
 MOMENTO_OBSERVACOES_MAX = 2000
 from easyfeet.repositories import (
     AvaliacaoRepository,
     ClienteRepository,
+    FichaNavicularRepository,
     FichaPodoscopioRepository,
+    LaudoNavicularRepository,
     LaudoRepository,
     MarcacaoPlantarRepository,
     PalmilhaRepository,
@@ -27,6 +36,8 @@ class EasyFeetService:
         self.palmilhas = PalmilhaRepository(session)
         self.marcacoes = MarcacaoPlantarRepository(session)
         self.fichas_podoscopio = FichaPodoscopioRepository(session)
+        self.fichas_navicular = FichaNavicularRepository(session)
+        self.laudos_navicular = LaudoNavicularRepository(session)
 
     def cadastrar_cliente(
         self,
@@ -216,6 +227,134 @@ class EasyFeetService:
         if ficha_id is not None:
             return self.fichas_podoscopio.atualizar(ficha_id, **payload)
         return self.fichas_podoscopio.criar(cliente_id, **payload)
+
+    def excluir_ficha_podoscopio(self, ficha_id: int, *, cliente_id: int | None = None) -> None:
+        ficha = self.fichas_podoscopio.obter_por_id(ficha_id)
+        if not ficha:
+            raise ValueError("Ficha podoscopica nao encontrada.")
+        if cliente_id is not None and ficha.cliente_id != cliente_id:
+            raise ValueError("Ficha nao pertence a este paciente.")
+        self.fichas_podoscopio.excluir(ficha_id)
+
+    def _medicao_navicular_lado(
+        self,
+        sentado_texto: str,
+        pe_texto: str,
+        *,
+        lado: str,
+    ) -> tuple[float | None, float | None, float | None, str]:
+        sentado = parse_altura_mm(sentado_texto)
+        pe = parse_altura_mm(pe_texto)
+        if sentado is None and pe is None:
+            return None, None, None, ""
+        if sentado is None or pe is None:
+            raise ValueError(f"Pe {lado}: informe altura sentado e altura em pe, ou deixe ambos vazios.")
+        queda = calcular_queda_mm(sentado, pe)
+        return sentado, pe, queda, classificar_modo_a(queda, limiar_mm=NAVICULAR_LIMIAR_MM)
+
+    def salvar_ficha_navicular(
+        self,
+        cliente_id: int,
+        data_avaliacao_texto: str,
+        rotulo_atendimento: str,
+        queixa_objetivo: str,
+        altura_sentado_d_texto: str,
+        altura_pe_d_texto: str,
+        altura_sentado_e_texto: str,
+        altura_pe_e_texto: str,
+        observacoes: str,
+        *,
+        ficha_id: int | None = None,
+    ) -> FichaNavicular:
+        if not self.clientes.obter_por_id(cliente_id):
+            raise ValueError("Cliente nao encontrado.")
+        data_avaliacao = self.parse_data_avaliacao_podoscopio(data_avaliacao_texto)
+        sd, pd, qd, cd = self._medicao_navicular_lado(altura_sentado_d_texto, altura_pe_d_texto, lado="direito")
+        se, pe, qe, ce = self._medicao_navicular_lado(altura_sentado_e_texto, altura_pe_e_texto, lado="esquerdo")
+        payload = dict(
+            data_avaliacao=data_avaliacao,
+            rotulo_atendimento=(rotulo_atendimento or "").strip(),
+            queixa_objetivo=(queixa_objetivo or "").strip(),
+            altura_sentado_d_mm=sd,
+            altura_pe_d_mm=pd,
+            queda_d_mm=qd,
+            classificacao_d=cd,
+            altura_sentado_e_mm=se,
+            altura_pe_e_mm=pe,
+            queda_e_mm=qe,
+            classificacao_e=ce,
+            observacoes=(observacoes or "").strip(),
+        )
+        if ficha_id is not None:
+            return self.fichas_navicular.atualizar(ficha_id, **payload)
+        return self.fichas_navicular.criar(cliente_id, **payload)
+
+    def excluir_ficha_navicular(self, ficha_id: int, *, cliente_id: int | None = None) -> None:
+        ficha = self.fichas_navicular.obter_por_id(ficha_id)
+        if not ficha:
+            raise ValueError("Ficha navicular nao encontrada.")
+        if cliente_id is not None and ficha.cliente_id != cliente_id:
+            raise ValueError("Ficha nao pertence a este paciente.")
+        laudo = self.laudos_navicular.obter_por_ficha(ficha_id)
+        if laudo:
+            self.laudos_navicular.excluir(laudo.id)
+        self.fichas_navicular.excluir(ficha_id)
+
+    def textos_laudo_navicular_de_ficha(self, ficha_id: int) -> dict[str, str]:
+        ficha = self.fichas_navicular.obter_por_id(ficha_id)
+        if not ficha:
+            raise ValueError("Ficha navicular nao encontrada.")
+        return gerar_textos_laudo(ficha)
+
+    def salvar_laudo_navicular(
+        self,
+        cliente_id: int,
+        ficha_navicular_id: int,
+        profissional_nome: str,
+        interpretacao: str,
+        conclusao: str,
+        recomendacoes: str,
+        *,
+        laudo_id: int | None = None,
+    ) -> LaudoNavicular:
+        if not self.clientes.obter_por_id(cliente_id):
+            raise ValueError("Cliente nao encontrado.")
+        ficha = self.fichas_navicular.obter_por_id(ficha_navicular_id)
+        if not ficha:
+            raise ValueError("Ficha navicular nao encontrada.")
+        if ficha.cliente_id != cliente_id:
+            raise ValueError("Ficha nao pertence a este paciente.")
+        interpretacao_txt = (interpretacao or "").strip()
+        conclusao_txt = (conclusao or "").strip()
+        if not interpretacao_txt or not conclusao_txt:
+            raise ValueError("Interpretacao e conclusao sao obrigatorias.")
+        payload = dict(
+            profissional_nome=(profissional_nome or "").strip(),
+            interpretacao=interpretacao_txt,
+            conclusao=conclusao_txt,
+            recomendacoes=(recomendacoes or "").strip(),
+        )
+        if laudo_id is not None:
+            laudo = self.laudos_navicular.obter_por_id(laudo_id)
+            if not laudo:
+                raise ValueError("Laudo navicular nao encontrado.")
+            if laudo.cliente_id != cliente_id:
+                raise ValueError("Laudo nao pertence a este paciente.")
+            return self.laudos_navicular.atualizar(laudo_id, **payload)
+        existente = self.laudos_navicular.obter_por_ficha(ficha_navicular_id)
+        if existente:
+            raise ValueError(
+                f"Esta ficha ja possui laudo (#{existente.id}). Selecione-o na lista ou exclua antes de criar outro."
+            )
+        return self.laudos_navicular.criar(cliente_id, ficha_navicular_id, **payload)
+
+    def excluir_laudo_navicular(self, laudo_id: int, *, cliente_id: int | None = None) -> None:
+        laudo = self.laudos_navicular.obter_por_id(laudo_id)
+        if not laudo:
+            raise ValueError("Laudo navicular nao encontrado.")
+        if cliente_id is not None and laudo.cliente_id != cliente_id:
+            raise ValueError("Laudo nao pertence a este paciente.")
+        self.laudos_navicular.excluir(laudo_id)
 
     def criar_momento_clinico(
         self,
